@@ -1,0 +1,20 @@
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX dv: <http://bio2rdf.org/drugbank_vocabulary:>
+PREFIX dct: <http://purl.org/dc/terms/>
+PREFIX bv: <http://bio2rdf.org/bio2rdf_vocabulary:>
+SELECT DISTINCT ?smiles ?drug_id
+{
+  ?drug a dv:Drug .
+  ?drug dct:title ?drug_name .
+  ?drug bv:identifier ?drug_id .
+  ?drug dv:calculated-properties ?prop .
+  ?prop a dv:SMILES.
+  ?prop dv:value ?smiles .
+  ?drug dv:target ?target .
+  ?target dct:title ?target_name .
+  ?target bv:identifier ?target_id .
+  ?target dv:amino-acid-sequence ?seq .
+
+  #BIND(concat(?drug_name," (",?drug_id,")") AS ?drug_label)
+}
