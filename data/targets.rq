@@ -16,4 +16,4 @@ SELECT DISTINCT ?target_id ?target_name ?seq
   ?target dct:title ?target_name .
   ?target bv:identifier ?target_id .
   ?target dv:amino-acid-sequence ?seq .
-}
+} ORDER BY ?target_id
