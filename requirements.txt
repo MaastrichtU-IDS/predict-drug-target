@@ -1,2 +1,6 @@
-csv
+-e git+https://github.com/facebookresearch/esm.git#egg=fair-esm
 bio
+scipy
+torch
+matplotlib
+scikit-learn
