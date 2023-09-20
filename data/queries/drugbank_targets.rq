@@ -3,7 +3,8 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX dv: <http://bio2rdf.org/drugbank_vocabulary:>
 PREFIX dct: <http://purl.org/dc/terms/>
 PREFIX bv: <http://bio2rdf.org/bio2rdf_vocabulary:>
-SELECT DISTINCT ?smiles ?drug_id
+#SELECT (count(*) AS ?c) {
+SELECT ?seq (MIN(?target_id) AS ?target) (GROUP_CONCAT(DISTINCT ?target_id,"|") AS ?targets)
 {
   ?drug a dv:Drug .
   ?drug dct:title ?drug_name .
@@ -15,6 +16,5 @@ SELECT DISTINCT ?smiles ?drug_id
   ?target dct:title ?target_name .
   ?target bv:identifier ?target_id .
   ?target dv:amino-acid-sequence ?seq .
-
-  #BIND(concat(?drug_name," (",?drug_id,")") AS ?drug_label)
-}
+} GROUP BY ?seq
+#}

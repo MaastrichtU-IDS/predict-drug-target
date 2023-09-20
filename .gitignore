@@ -1,3 +1,2 @@
 .venv
-data/drugbank_targets_emb_ems2
-data/drugbank.old
+data/vectors

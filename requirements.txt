@@ -4,3 +4,6 @@ scipy
 torch
 matplotlib
 scikit-learn
+ipykernel
+findspark
+pyspark
