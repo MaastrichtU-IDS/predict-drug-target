@@ -59,5 +59,5 @@ cd ..
 
 Run the prediction tool
 ```bash
-python dt_predict.py
+python src/dt_predict.py
 ```
