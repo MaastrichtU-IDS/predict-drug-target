@@ -16,7 +16,7 @@ Install requirements
 pip install -e .
 ```
 
-Query the Bio2RDF endpoint
+Query the Bio2RDF endpoint to get drugs and their smiles, targets and their protein sequences, and the set of known drug-target pairs
 ```bash
 ./get_bio2rdf_data.sh
 ```
