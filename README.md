@@ -56,3 +56,6 @@ Run the prediction tool
 ```bash
 python src/dt_predict.py
 ```
+
+Results are in results folder
+
