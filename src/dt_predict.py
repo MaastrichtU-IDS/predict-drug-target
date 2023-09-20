@@ -266,8 +266,8 @@ if sc:
     print (sc)
 
 n_seed =100
-n_fold = 5
-n_run = 1
+n_fold = 10
+n_run = 2
 n_proportion = 1
 all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
 all_scores_df.to_csv(results_file,sep=',', index=False)
