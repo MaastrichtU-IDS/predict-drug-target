@@ -7,3 +7,5 @@ scikit-learn
 ipykernel
 findspark
 pyspark
+notebook
+numpy
