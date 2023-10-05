@@ -1,4 +1,5 @@
 # drug-target-emb-predict
+
 This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict drug-targets.
 
 ## Install
@@ -15,6 +16,8 @@ Install requirements
 ```bash
 pip install -e .
 ```
+
+## Prepare data and embeddings
 
 Query the Bio2RDF endpoint to get drugs and their smiles, targets and their protein sequences, and the set of known drug-target pairs
 ```bash
@@ -52,10 +55,30 @@ mv embeddings/drugbank_smiles.npz ../data/vectors/
 cd ..
 ```
 
-Run the prediction tool
+## Run training
+
+Train the model:
+
 ```bash
-python src/dt_predict.py
+python src/train.py
 ```
 
 Results are in results folder
 
+## Get predictions
+
+Run the prediction workflow for 2 entities:
+
+```bash
+python src/predict.py
+```
+
+## Deploy the vectordb
+
+The vectordb is used to store embeddings for the entities and make querying faster.
+
+Use the `docker-compose.yml` and config files in the `vectordb` folder (make changes as needed)
+
+```bash
+docker compose up -d
+```
