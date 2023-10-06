@@ -1,33 +1,36 @@
-import numpy as np
-import pandas as pd
-import os
-import random
 import numbers
-import numpy
+import os
 import pickle
+import random
 from datetime import date
 
+import numpy
+import numpy as np
+import pandas as pd
+import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
-import findspark
-from pyspark import SparkConf, SparkContext
-import torch
+from src.utils import normalize_id_to_translator
+from src.vectordb import init_vectordb
+
+vectordb = init_vectordb(recreate=False)
 
 
-def loadProteinEmbeddings(path, embedding_layer = 33, use_mean=True):
+def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
     import glob
-    files = sorted(glob.glob(path+'/*.pt'))
+
+    files = sorted(glob.glob(path + "/*.pt"))
     protein_embeddings = []
     protein_labels = []
     for file in files:
         try:
-            label = file.split('.pt')[0].split('/')[-1]
+            label = file.split(".pt")[0].split("/")[-1]
             embs = torch.load(file)
-            representation = 'representations'
+            representation = "representations"
             if use_mean:
-                    representation = 'mean_representations'
-            emb = embs[representation][embedding_layer] # this is a torch.Tensor
+                representation = "mean_representations"
+            emb = embs[representation][embedding_layer]  # this is a torch.Tensor
             # the mean_representations are the same size for each entry
             # the per_tok embedding, it is seq size by 1280
             protein_embeddings.append(emb)
@@ -37,65 +40,63 @@ def loadProteinEmbeddings(path, embedding_layer = 33, use_mean=True):
             continue
 
     # vectors = np.stack([emb.mean(axis=0) for emb in embeddings])
-    Xs = torch.stack(protein_embeddings,dim=0).numpy() # numpy.ndarray 3775 x 1280
-    target_labels_df = pd.DataFrame(protein_labels, columns=['target'])
+    Xs = torch.stack(protein_embeddings, dim=0).numpy()  # numpy.ndarray 3775 x 1280
+    target_labels_df = pd.DataFrame(protein_labels, columns=["target"])
     target_embeddings_df = pd.DataFrame(Xs)
-    target_embeddings_df['target'] = target_labels_df['target']
-    #target_df = target_labels_df.merge(target_embeddings_df, how='cross')
+    target_embeddings_df["target"] = target_labels_df["target"]
+    # target_df = target_labels_df.merge(target_embeddings_df, how='cross')
     return target_embeddings_df
+
 
 def loadDrugEmbeddings(drug_labels_file, drug_embeddings_file):
     drug_labels_df = pd.read_csv(drug_labels_file)
-    drug_labels_df = drug_labels_df.drop(columns=['smiles','drugs'])
+    drug_labels_df = drug_labels_df.drop(columns=["smiles", "drugs"])
     o = np.load(drug_embeddings_file)  # numpy.lib.npyio.NpzFile
     files = o.files  # 5975 files
     embeddings = []
     for file in files:
-        #print(file)
-        emb = o[file]  #emb 'numpy.ndarray' n length x 512
+        # print(file)
+        emb = o[file]  # emb 'numpy.ndarray' n length x 512
         embeddings.append(emb)
-        #print(emb.shape)
+        # print(emb.shape)
     vectors = np.stack([emb.mean(axis=0) for emb in embeddings])
-    #vectors.shape # 5975, 512
+    # vectors.shape # 5975, 512
     df = pd.DataFrame(vectors)
-    drug_df = drug_labels_df.merge(df,left_index=True,right_index=True)
+    drug_df = drug_labels_df.merge(df, left_index=True, right_index=True)
     return drug_df
+
 
 def loadDrugTargets(path):
     df = pd.read_csv(path)
     return df
 
+
 def generateDTPairs(dt_df):
-    dtKnown = set([tuple(x) for x in dt_df[['drug','target']].values])
-    pairs = list()
-    labels = list()
+    dtKnown = {tuple(x) for x in dt_df[["drug", "target"]].values}
+    pairs = []
+    labels = []
 
     drugs = set(dt_df.drug.unique())
     targets = set(dt_df.target.unique())
     for d in drugs:
         for t in targets:
-            if (d,t) in dtKnown:
-                label=1
-            else:
-                label=0
+            label = 1 if (d, t) in dtKnown else 0
 
-            pairs.append((d,t))
+            pairs.append((d, t))
             labels.append(label)
 
     pairs = np.array(pairs)
     labels = np.array(labels)
     return pairs, labels
 
+
 def multimetric_score(estimator, X_test, y_test, scorers):
     """Return a dict of score for multimetric scoring"""
     scores = {}
     for name, scorer in scorers.items():
-        if y_test is None:
-            score = scorer(estimator, X_test)
-        else:
-            score = scorer(estimator, X_test, y_test)
+        score = scorer(estimator, X_test) if y_test is None else scorer(estimator, X_test, y_test)
 
-        if hasattr(score, 'item'):
+        if hasattr(score, "item"):
             try:
                 # e.g. unwrap memmapped scalars
                 score = score.item()
@@ -105,10 +106,11 @@ def multimetric_score(estimator, X_test, y_test, scorers):
         scores[name] = score
 
         if not isinstance(score, numbers.Number):
-            raise ValueError("scoring must return a number, got %s (%s) "
-                             "instead. (scorer=%s)"
-                             % (str(score), type(score), name))
+            raise ValueError(
+                f"scoring must return a number, got {score!s} ({type(score)}) " f"instead. (scorer={name})"
+            )
     return scores
+
 
 def balance_data(pairs, classes, n_proportion):
     classes = np.array(classes)
@@ -118,58 +120,67 @@ def balance_data(pairs, classes, n_proportion):
     indices_false = np.where(classes == 0)[0]
 
     np.random.shuffle(indices_false)
-    indices = indices_false[:(n_proportion*indices_true.shape[0])]
+    indices = indices_false[: (n_proportion * indices_true.shape[0])]
 
-    print (f"True positives: {len(indices_true)}")
-    print (f"True negatives: {len(indices_false)}")
+    print(f"True positives: {len(indices_true)}")
+    print(f"True negatives: {len(indices_false)}")
     pairs = np.concatenate((pairs[indices_true], pairs[indices]), axis=0)
     classes = np.concatenate((classes[indices_true], classes[indices]), axis=0)
 
     return pairs, classes
 
+
 def get_scores(clf, X_new, y_new):
-    scoring = ['precision', 'recall', 'accuracy', 'roc_auc', 'f1', 'average_precision']
+    scoring = ["precision", "recall", "accuracy", "roc_auc", "f1", "average_precision"]
     scorers = metrics._scorer._check_multimetric_scoring(clf, scoring=scoring)
     scores = multimetric_score(clf, X_new, y_new, scorers)
     return scores
 
-def crossvalid(train_df, test_df, clfs, run_index, fold_index):
-    features_cols= train_df.columns.difference(['drug','target' ,'Class'])
-    print(f"Features count: {len(features_cols)}")
-    X=train_df[features_cols].values
-    y=train_df['Class'].values.ravel()
 
-    X_new=test_df[features_cols].values
-    y_new=test_df['Class'].values.ravel()
+def crossvalid(train_df, test_df, clfs, run_index, fold_index):
+    features_cols = train_df.columns.difference(["drug", "target", "Class"])
+    print(f"Features count: {len(features_cols)}")
+    X = train_df[features_cols].values
+    y = train_df["Class"].values.ravel()
+
+    X_new = test_df[features_cols].values
+    y_new = test_df["Class"].values.ravel()
 
     results = pd.DataFrame()
     for name, clf in clfs:
         clf.fit(X, y)
         row = {}
-        row['run'] = run_index
-        row['fold'] = fold_index
-        row['method'] = name
+        row["run"] = run_index
+        row["fold"] = fold_index
+        row["method"] = name
         scores = get_scores(clf, X_new, y_new)
         row.update(scores)
 
         df = pd.DataFrame.from_dict([row])
         results = pd.concat([results, df], ignore_index=True)
 
-    return results #, sclf_scores
+    return results  # , sclf_scores
+
 
 def cv_run(run_index, pairs, classes, embedding_df, train, test, fold_index, clfs):
     # print( f"Run: {run_index} Fold: {fold_index} Train size: {len(train)} Test size: {len(test)}")
-    train_df = pd.DataFrame( list(zip(pairs[train,0],pairs[train,1],classes[train])),columns=['drug','target','Class'])
-    test_df = pd.DataFrame( list(zip(pairs[test,0],pairs[test,1],classes[test])),columns=['drug','target','Class'])
+    train_df = pd.DataFrame(
+        list(zip(pairs[train, 0], pairs[train, 1], classes[train])), columns=["drug", "target", "Class"]
+    )
+    test_df = pd.DataFrame(
+        list(zip(pairs[test, 0], pairs[test, 1], classes[test])), columns=["drug", "target", "Class"]
+    )
 
-    train_df = train_df.merge(embedding_df['drug'], left_on='drug', right_on='drug')\
-            .merge(embedding_df['target'], left_on='target', right_on='target')
-    test_df = test_df.merge(embedding_df['drug'], left_on='drug', right_on='drug')\
-            .merge(embedding_df['target'], left_on='target', right_on='target')
+    train_df = train_df.merge(embedding_df["drug"], left_on="drug", right_on="drug").merge(
+        embedding_df["target"], left_on="target", right_on="target"
+    )
+    test_df = test_df.merge(embedding_df["drug"], left_on="drug", right_on="drug").merge(
+        embedding_df["target"], left_on="target", right_on="target"
+    )
 
     all_scores = crossvalid(train_df, test_df, clfs, run_index, fold_index)
     if run_index == 1 and fold_index == 0:
-        print(', '.join(all_scores.columns))
+        print(", ".join(all_scores.columns))
     print(all_scores.to_string(header=False, index=False))
 
     return all_scores
@@ -187,26 +198,28 @@ def cvSpark(sc, run_index, pairs, classes, cv, embedding_df, clfs):
 
     return all_scores
 
+
 def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_proportion, n_seed):
     if sc:
         bc_embedding_df = sc.broadcast(embedding_df)
     scores_df = pd.DataFrame()
-    for r in range(1, n_run +1):
+    for r in range(1, n_run + 1):
         n_seed += r
         random.seed(n_seed)
         np.random.seed(n_seed)
-        pairs, classes= balance_data(pairs_all, classes_all, n_proportion)
+        pairs, classes = balance_data(pairs_all, classes_all, n_proportion)
 
         skf = StratifiedKFold(n_splits=n_fold, shuffle=True, random_state=n_seed)
         cv = skf.split(pairs, classes)
 
-        pairs_classes = (pairs,classes)
-        cv_list = [ (train,test,k) for k, (train, test) in enumerate(cv)]
+        pairs_classes = (pairs, classes)
+        cv_list = [(train, test, k) for k, (train, test) in enumerate(cv)]
 
         if sc:
             bc_pairs_classes = sc.broadcast(pairs_classes)
-            scores = cvSpark(sc, r, bc_pairs_classes.value[0], bc_pairs_classes.value[1],
-                             cv_list, bc_embedding_df.value, clfs)
+            scores = cvSpark(
+                sc, r, bc_pairs_classes.value[0], bc_pairs_classes.value[1], cv_list, bc_embedding_df.value, clfs
+            )
             for score in scores:
                 scores_df = pd.concat([scores_df, score], ignore_index=True)
         else:
@@ -218,47 +231,74 @@ def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pro
 ######
 
 embeddings = {}
-protein_embeddings_path = './data/vectors/drugbank_targets_esm2_l33_mean'
-embeddings['target'] = loadProteinEmbeddings(protein_embeddings_path)
+protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
+embeddings["target"] = loadProteinEmbeddings(protein_embeddings_path)
 
-drug_labels_path     = './data/download/drugbank_drugs.csv'
-drug_embeddings_path = './data/vectors/drugbank_smiles.npz'
+drug_labels_path = "./data/download/drugbank_drugs.csv"
+drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
 drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
-embeddings['drug'] = drug_embeddings
+embeddings["drug"] = drug_embeddings
 
-drug_target_path = './data/download/drugbank_drug_targets.csv'
+drug_target_path = "./data/download/drugbank_drug_targets.csv"
 dt_df = loadDrugTargets(drug_target_path)
 
 today = date.today()
-results_file = f'./data/results/drugbank_drug_targets_scores_{today}.csv'
-agg_results_file = f'./data/results/drugbank_drug_targets_agg_{today}.csv'
+results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
+agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
+
+# drugs_list = embeddings["drug"]["drug"].tolist()
+drugs_list = ["DRUGBANK:" + drug_id for drug_id in embeddings["drug"]["drug"]][:10]
+
+print(drugs_list)
+normalized_ids = normalize_id_to_translator(drugs_list)
+
+print(normalized_ids)
+
+# Add drug embeddings to the vector db
+for _index, row in embeddings["drug"].iterrows():
+    vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
+    vectordb.add("drug", f"DRUGBANK:{row['drug']}", vector)
+    # sequence=smiles
+    # TODO: Get chembl ID from drugbank ID?
+    # chembl_id = None
+    # if row["drug"] in normalized_ids:
+    #     # chembl_id = normalized_ids[row["drug"]]["equivalent_identifiers"]
+    #     for alt_id in normalized_ids[row["drug"]]["equivalent_identifiers"]:
+    #         if alt_id["identifier"].startswith("PUBCHEM.COMPOUND:"):
+    #             chembl_id = alt_id["identifier"]
+    #             break
+    # if chembl_id:
+    #     print(f"Adding {chembl_id} to the vector DB")
+    #     vectordb.add("drug", chembl_id, vector)
+
+# DRUGBANK.BIOENTITY:
 
 pairs, labels = generateDTPairs(dt_df)
-ndrugs = len(embeddings['drug'])
-ntargets = len(embeddings['target'])
+ndrugs = len(embeddings["drug"])
+ntargets = len(embeddings["target"])
 print(f"Drugs: {ndrugs}")
 print(f"Targets: {ntargets}")
 unique, counts = numpy.unique(labels, return_counts=True)
 ndrugtargets = counts[1]
 print(f"Drug-Targets: {ndrugtargets}")
 
-#nb_model = GaussianNB()
-#lr_model = linear_model.LogisticRegression()
+# nb_model = GaussianNB()
+# lr_model = linear_model.LogisticRegression()
 rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
 
-#clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-clfs = [('Random Forest',rf_model)]
+# clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
+clfs = [("Random Forest", rf_model)]
 
-n_seed =100
+n_seed = 100
 n_fold = 10
 n_run = 2
 n_proportion = 1
 sc = None
 all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
-all_scores_df.to_csv(results_file,sep=',', index=False)
+all_scores_df.to_csv(results_file, sep=",", index=False)
 
-agg_df = all_scores_df.groupby(['method','run']).mean().groupby('method').mean()
-agg_df.to_csv(agg_results_file,sep=',', index=False)
+agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
+agg_df.to_csv(agg_results_file, sep=",", index=False)
 print("overall:")
 print(agg_df)
 

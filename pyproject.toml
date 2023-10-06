@@ -28,6 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
+    "trapi-predict-kit",
     "fair-esm",
     "bio",
     "scipy",
@@ -75,8 +76,8 @@ features = [
 train = "python3 src/train.py {args}"
 predict = "python3 src/predict.py {args}"
 fmt = [
-    "black",
-    "ruff --fix",
+    "black src/",
+    "ruff src/ --fix",
 ]
 test = [
     "fmt",

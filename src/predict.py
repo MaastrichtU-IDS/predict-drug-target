@@ -1,24 +1,17 @@
-import numpy as np
-import pandas as pd
 import os
 import pickle
-import requests
 from datetime import datetime
-from itertools import product
 
-import torch
 import esm
-from src.vectordb import QdrantDB
-from src.utils import log, BOLD, END
+import numpy as np
+import pandas as pd
+import requests
+import torch
 
-recreate_vectordb = False
-qdrant_url = "qdrant.137.120.31.148.nip.io"
-qdrant_apikey = "TOCHANGE"
-collections = [
-    {"name": "drug", "size": 512},
-    {"name": "target", "size": 1280},
-] # Total 1792 features cols
-vectordb = QdrantDB(collections=collections, recreate=recreate_vectordb, host=qdrant_url, port=443, api_key=qdrant_apikey)
+from src.utils import BOLD, END, log
+from src.vectordb import init_vectordb
+
+vectordb = init_vectordb(recreate=False)
 
 
 def load_model(path: str = "models/drug_target.pkl"):
@@ -27,17 +20,20 @@ def load_model(path: str = "models/drug_target.pkl"):
 
 
 def get_smiles_for_drug(chembl_id: str):
-    # Not all molevule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
-    if chembl_id.lower().startswith("chembl"):
-        chembl_id = chembl_id[7:]
+    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
+    if chembl_id.lower().startswith("chembl.compound:"):
+        chembl_id = chembl_id[16:]
     res = requests.get(f"https://www.ebi.ac.uk/chembl/api/data/molecule/{chembl_id}?format=json").json()
     return res["molecule_structures"]["canonical_smiles"]
 
+
 def get_seq_for_target(ensembl_id: str):
     # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
-    if ensembl_id.lower().startswith("ensembl"):
+    if ensembl_id.lower().startswith("ensembl:"):
         ensembl_id = ensembl_id[8:]
-    res = requests.get(f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{ensembl_id}?offset=0&size=100&format=json").json()
+    res = requests.get(
+        f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{ensembl_id}?offset=0&size=100&format=json"
+    ).json()
     return res[0]["sequence"]["sequence"]
 
 
@@ -55,17 +51,19 @@ def compute_drug_embedding(drugs: list[str]) -> pd.DataFrame:
         log.info(f"⏳💊 Drug {chembl_id} not found in VectorDB, computing its embeddings")
         drug_smiles = get_smiles_for_drug(chembl_id)
         print(f"drug_smiles! {chembl_id} {drug_smiles}")
-        with open(f"../tmp/drug_smiles.txt", 'w') as f:
+        with open("../tmp/drug_smiles.txt", "w") as f:
             f.write(drug_smiles)
-        os.system(f"python embed.py --data_path=../tmp/drug_smiles.txt")
-        o = np.load(f"embeddings/drug_smiles.npz")
+        os.system("python embed.py --data_path=../tmp/drug_smiles.txt")
+        o = np.load("embeddings/drug_smiles.npz")
         files = o.files  # 1 file
         gen_embeddings = []
         for file in files:
-            gen_embeddings.append(o[file]) # 'numpy.ndarray' n length x 512
+            gen_embeddings.append(o[file])  # 'numpy.ndarray' n length x 512
         vectors = np.stack([emb.mean(axis=0) for emb in gen_embeddings])
-        vectordb.add("drug", chembl_id, list(vectors)[0], drug_smiles)
-        embeddings.append(list(vectors)[0])
+        # In this case we vectorize one by one, so only 1 row in the array
+        vector = vectors[0].tolist()
+        vectordb.add("drug", chembl_id, vector, drug_smiles)
+        embeddings.append(list(vector))
     return pd.DataFrame(embeddings)
 
 
@@ -98,9 +96,10 @@ def compute_target_embedding(targets: list[str]) -> pd.DataFrame:
         for i, tokens_len in enumerate(batch_lens):
             sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
 
-        target_embeddings = torch.stack(sequence_representations,dim=0).numpy() # numpy.ndarray 3775 x 1280
-        vectordb.add("target", ensembl_id, list(target_embeddings)[0], target_seq)
-        embeddings.append(list(target_embeddings)[0])
+        target_embeddings = torch.stack(sequence_representations, dim=0).numpy()  # numpy.ndarray 3775 x 1280
+        vector = target_embeddings[0].tolist()
+        vectordb.add("target", ensembl_id, vector, target_seq)
+        embeddings.append(next(iter(target_embeddings)))  # get 0 of the list
     return pd.DataFrame(embeddings)
 
 
@@ -113,7 +112,7 @@ def get_predictions(drugs: list[str], targets: list[str]):
     target_embed = compute_target_embedding(targets)
 
     # Merge embeddings
-    merged_embeddings = pd.merge(drug_embed, target_embed, how='cross')
+    merged_embeddings = pd.merge(drug_embed, target_embed, how="cross")
     merged_embeddings.columns = merged_embeddings.columns.astype(str)
     # log.info("Merged embeddings should have 1792 columns (512 from drugs + 1280 from targets)")
     # log.info(merged_embeddings)
@@ -125,17 +124,17 @@ def get_predictions(drugs: list[str], targets: list[str]):
     scores = []
     for drug in drugs:
         for target in targets:
-            scores.append({
-                "drug": drug,
-                "target": target,
-                "score": interaction_scores[len(scores)]
-            })
+            scores.append({"drug": drug, "target": target, "score": interaction_scores[len(scores)]})
 
-    log.info(f"⚡ Interaction score between {drugs} and {targets} is {BOLD}{interaction_scores}{END} (computed in {datetime.now() - time_start})")
+    log.info(
+        f"⚡ Interaction score between {drugs} and {targets} is {BOLD}{interaction_scores}{END} (computed in {datetime.now() - time_start})"
+    )
     return scores
 
-drugs = ["CHEMBL:CHEMBL535", "CHEMBL:CHEMBL64545"]
-targets = ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"]
-# TODO: Pass None to get all targets or all drugs
-predictions = get_predictions(drugs, targets)
-print(predictions)
+
+if __name__ == "__main__":
+    drugs = ["CHEMBL.COMPOUND:CHEMBL535", "CHEMBL.COMPOUND:CHEMBL64545"]
+    targets = ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"]
+    # TODO: Pass None to get all targets or all drugs
+    predictions = get_predictions(drugs, targets)
+    print(predictions)
