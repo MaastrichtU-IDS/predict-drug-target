@@ -2,6 +2,8 @@
 
 This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict drug-targets.
 
+Computed vectors are stored in a vector database: https://qdrant.137.120.31.148.nip.io/dashboard
+
 ## Install
 
 Create and activate local environment
@@ -96,19 +98,20 @@ There are a few solutions, more or less mature, here are the runner ups:
 
 * **Qdrant**: the newest kid in the block. It's the fastest according to the few benchmarks I could find. Globally the whole system is really well thought, easy to use, and just fast (simple API, dev/production workflow switch). Metadata for vectors are stored in a JSON payload.
     * 3 similarity [search algorithms available](https://qdrant.tech/documentation/concepts/search/#metrics): dot, cosine, euclid
-    * No UI (yet?)
 * **Milvus**: more features, still quite fast, bug heavier. Has a web UI
     * 3 similarity [search algorithms available](https://milvus.io/docs/metric.md): inner product (is it similar to dot??), cosine, euclid
-    * There is a web UI, but is it really needed?
-* **Weaviate**: more "battery included" features, but slower, and heavier. As a GraphQL API (not sure if it's better than a well thought good ol' REST-like API tbh)
+* **Weaviate**: more battery included, but slower, and heavier. As a GraphQL API (not sure if it's better than a well thought good ol' REST-like API tbh)
     * Similarity search in weaviate seems to be hidden under some additional abstration layers: https://weaviate.io/developers/weaviate/search/similarity, which can make the whole thing harder to curb to our needs. But it seems to also support dot, cosine, and euclid
-    * Web UI + GraphQL API (but is it really needed?)
+    * GraphQL API (but is it really needed?)
+* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116))
 * **pgvector**: a vertordb in postgres, really nice if you already use SQL or postgres in your system. But for our needs I feel like a simpler NoSQL system would be easier to use and maintain
 
 
 Some references:
 - https://www.brainbyte.io/the-best-vector-databases/
 - https://qdrant.tech/benchmarks/
+- https://lakefs.io/blog/12-vector-databases-2023/
+
 
 ### Deploy the vector db
 
@@ -117,5 +120,6 @@ The vectordb is used to store embeddings for the entities and make querying fast
 To run it locally, edit the host in the `src/predict.py` script. And use the `docker-compose.yml` and config files from the `vectordb` folder (make changes as needed)
 
 ```bash
+cd vectordb
 docker compose up -d
 ```
