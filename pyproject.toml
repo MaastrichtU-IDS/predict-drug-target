@@ -42,6 +42,7 @@ dependencies = [
     "numpy",
     "requests",
     "qdrant-client",
+    "PubChemPy",
 ]
 
 

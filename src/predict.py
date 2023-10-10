@@ -5,13 +5,10 @@ from datetime import datetime
 import esm
 import numpy as np
 import pandas as pd
-import requests
 import torch
 
-from src.utils import BOLD, END, log
-from src.vectordb import init_vectordb
-
-vectordb = init_vectordb(recreate=False)
+from src.utils import BOLD, END, log, get_smiles_for_drug, get_seq_for_target
+from src.vectordb import init_vectordb, VectorDB
 
 
 def load_model(path: str = "models/drug_target.pkl"):
@@ -19,25 +16,7 @@ def load_model(path: str = "models/drug_target.pkl"):
         return pickle.load(f)
 
 
-def get_smiles_for_drug(chembl_id: str):
-    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
-    if chembl_id.lower().startswith("chembl.compound:"):
-        chembl_id = chembl_id[16:]
-    res = requests.get(f"https://www.ebi.ac.uk/chembl/api/data/molecule/{chembl_id}?format=json").json()
-    return res["molecule_structures"]["canonical_smiles"]
-
-
-def get_seq_for_target(ensembl_id: str):
-    # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
-    if ensembl_id.lower().startswith("ensembl:"):
-        ensembl_id = ensembl_id[8:]
-    res = requests.get(
-        f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{ensembl_id}?offset=0&size=100&format=json"
-    ).json()
-    return res[0]["sequence"]["sequence"]
-
-
-def compute_drug_embedding(drugs: list[str]) -> pd.DataFrame:
+def compute_drug_embedding(drugs: list[str], vectordb: VectorDB) -> pd.DataFrame:
     embeddings = []
     os.makedirs("tmp", exist_ok=True)
     os.chdir("MolecularTransformerEmbeddings")
@@ -67,7 +46,7 @@ def compute_drug_embedding(drugs: list[str]) -> pd.DataFrame:
     return pd.DataFrame(embeddings)
 
 
-def compute_target_embedding(targets: list[str]) -> pd.DataFrame:
+def compute_target_embedding(targets: list[str], vectordb: VectorDB) -> pd.DataFrame:
     embeddings = []
     for ensembl_id in targets:
         from_vectordb = vectordb.get("target", ensembl_id)
@@ -133,7 +112,9 @@ def get_predictions(drugs: list[str], targets: list[str]):
 
 
 if __name__ == "__main__":
-    drugs = ["CHEMBL.COMPOUND:CHEMBL535", "CHEMBL.COMPOUND:CHEMBL64545"]
+    vectordb = init_vectordb(recreate=False)
+    # drugs = ["CHEMBL.COMPOUND:CHEMBL535", "CHEMBL.COMPOUND:CHEMBL64545"]
+    drugs = ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
     targets = ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"]
     # TODO: Pass None to get all targets or all drugs
     predictions = get_predictions(drugs, targets)

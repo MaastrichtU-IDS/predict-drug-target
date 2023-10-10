@@ -11,10 +11,10 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
-from src.utils import normalize_id_to_translator
+from src.utils import log, normalize_id_to_translator, get_smiles_for_drug, get_seq_for_target
 from src.vectordb import init_vectordb
 
-vectordb = init_vectordb(recreate=False)
+vectordb = init_vectordb(recreate=True)
 
 
 def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
@@ -246,32 +246,35 @@ today = date.today()
 results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
 agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
 
-# drugs_list = embeddings["drug"]["drug"].tolist()
-drugs_list = ["DRUGBANK:" + drug_id for drug_id in embeddings["drug"]["drug"]][:10]
 
-print(drugs_list)
-normalized_ids = normalize_id_to_translator(drugs_list)
 
-print(normalized_ids)
 
+## Store all drugs vectors in the vector db
+
+drugs_list = [f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]]
+pubchem_ids = normalize_id_to_translator(drugs_list)
+
+# pubchem_ids = normalize_id_to_translator([f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]])
+# print(pubchem_ids)
+
+failed_conversion = []
 # Add drug embeddings to the vector db
 for _index, row in embeddings["drug"].iterrows():
+    log.info(f"Drug {_index}/{len(embeddings['drug'])}")
     vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
-    vectordb.add("drug", f"DRUGBANK:{row['drug']}", vector)
-    # sequence=smiles
-    # TODO: Get chembl ID from drugbank ID?
-    # chembl_id = None
-    # if row["drug"] in normalized_ids:
-    #     # chembl_id = normalized_ids[row["drug"]]["equivalent_identifiers"]
-    #     for alt_id in normalized_ids[row["drug"]]["equivalent_identifiers"]:
-    #         if alt_id["identifier"].startswith("PUBCHEM.COMPOUND:"):
-    #             chembl_id = alt_id["identifier"]
-    #             break
-    # if chembl_id:
-    #     print(f"Adding {chembl_id} to the vector DB")
-    #     vectordb.add("drug", chembl_id, vector)
+    # if pubchem_id not in pubchem_ids:
+    #     failed_conversion.append(row['drug'])
+    #     continue
+    pubchem_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
+    if not pubchem_id or not pubchem_id.lower().startswith("pubchem.compound:"):
+        failed_conversion.append(f"{row['drug']} > {pubchem_id}")
+        continue
 
-# DRUGBANK.BIOENTITY:
+    # pubchem = normalize_id_to_translator()
+    vectordb.add("drug", pubchem_id, vector, sequence=get_smiles_for_drug(pubchem_id))
+
+
+print("\n".join(failed_conversion))
 
 pairs, labels = generateDTPairs(dt_df)
 ndrugs = len(embeddings["drug"])

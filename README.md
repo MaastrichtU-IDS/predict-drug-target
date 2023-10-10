@@ -96,14 +96,14 @@ It's the new hot thing in the database world: databases for "modern" AI. To stor
 
 There are a few solutions, more or less mature, here are the runner ups:
 
-* **Qdrant**: the newest kid in the block. It's the fastest according to the few benchmarks I could find. Globally the whole system is really well thought, easy to use, and just fast (simple API, dev/production workflow switch). Metadata for vectors are stored in a JSON payload.
+* **Qdrant**: the newest kid in the block. It's the fastest according to the few benchmarks I could find. Globally the whole system is really well thought, easy to use, and just fast (simple API, dev/production workflow easy setup, written in rust). Metadata for vectors are stored in a JSON payload.
     * 3 similarity [search algorithms available](https://qdrant.tech/documentation/concepts/search/#metrics): dot, cosine, euclid
 * **Milvus**: more features, still quite fast, bug heavier. Has a web UI
     * 3 similarity [search algorithms available](https://milvus.io/docs/metric.md): inner product (is it similar to dot??), cosine, euclid
 * **Weaviate**: more battery included, but slower, and heavier. As a GraphQL API (not sure if it's better than a well thought good ol' REST-like API tbh)
     * Similarity search in weaviate seems to be hidden under some additional abstration layers: https://weaviate.io/developers/weaviate/search/similarity, which can make the whole thing harder to curb to our needs. But it seems to also support dot, cosine, and euclid
     * GraphQL API (but is it really needed?)
-* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116))
+* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116)). How could they raise so much money from VCs?
 * **pgvector**: a vertordb in postgres, really nice if you already use SQL or postgres in your system. But for our needs I feel like a simpler NoSQL system would be easier to use and maintain
 
 
