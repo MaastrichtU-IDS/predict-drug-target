@@ -12,7 +12,7 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 
-from src.utils import BOLD, END, log
+from src.utils import BOLD, END, log, EMBEDDINGS_SIZE_DRUG, EMBEDDINGS_SIZE_TARGET
 
 
 # Define an abstract class VectorDB
@@ -136,11 +136,7 @@ class QdrantDB(VectorDB):
         return search_result[0]
 
 
-def init_vectordb(recreate: bool = False):
+def init_vectordb(collections: list[dict[str, str]], recreate: bool = False):
     qdrant_url = "qdrant.137.120.31.148.nip.io"
     qdrant_apikey = "TOCHANGE"
-    collections = [
-        {"name": "drug", "size": 512},
-        {"name": "target", "size": 1280},
-    ]  # Total 1792 features cols
     return QdrantDB(collections=collections, recreate=recreate, host=qdrant_url, port=443, api_key=qdrant_apikey)

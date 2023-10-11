@@ -3,6 +3,16 @@ from pubchempy import Compound
 
 import requests
 
+VECTORDB_MAX_LIMIT = 100000
+
+EMBEDDINGS_SIZE_DRUG = 512
+EMBEDDINGS_SIZE_TARGET = 1280
+COLLECTIONS = [
+    {"name": "drug", "size": EMBEDDINGS_SIZE_DRUG},
+    {"name": "target", "size": EMBEDDINGS_SIZE_TARGET},
+] # Total 1792 features cols
+
+
 ## Instantiate logging utility
 log = logging.getLogger()
 log.propagate = False

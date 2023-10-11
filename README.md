@@ -103,7 +103,7 @@ There are a few solutions, more or less mature, here are the runner ups:
 * **Weaviate**: more battery included, but slower, and heavier. As a GraphQL API (not sure if it's better than a well thought good ol' REST-like API tbh)
     * Similarity search in weaviate seems to be hidden under some additional abstration layers: https://weaviate.io/developers/weaviate/search/similarity, which can make the whole thing harder to curb to our needs. But it seems to also support dot, cosine, and euclid
     * GraphQL API (but is it really needed?)
-* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116)). How could they raise so much money from VCs?
+* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116)). How could they raise so much money from VCs? (there is a [running joke about this](https://github.com/jdagdelen/hyperDB) actually)
 * **pgvector**: a vertordb in postgres, really nice if you already use SQL or postgres in your system. But for our needs I feel like a simpler NoSQL system would be easier to use and maintain
 
 

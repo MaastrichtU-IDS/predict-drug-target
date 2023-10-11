@@ -11,10 +11,10 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
-from src.utils import log, normalize_id_to_translator, get_smiles_for_drug, get_seq_for_target
+from src.utils import log, normalize_id_to_translator, get_smiles_for_drug, get_seq_for_target, COLLECTIONS
 from src.vectordb import init_vectordb
 
-vectordb = init_vectordb(recreate=True)
+vectordb = init_vectordb(COLLECTIONS, recreate=True)
 
 
 def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
@@ -253,9 +253,7 @@ agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
 
 drugs_list = [f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]]
 pubchem_ids = normalize_id_to_translator(drugs_list)
-
-# pubchem_ids = normalize_id_to_translator([f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]])
-# print(pubchem_ids)
+# 416 drugs dont have a Pubchem ID as pref ID, we ignore them for now
 
 failed_conversion = []
 # Add drug embeddings to the vector db
@@ -273,7 +271,7 @@ for _index, row in embeddings["drug"].iterrows():
     # pubchem = normalize_id_to_translator()
     vectordb.add("drug", pubchem_id, vector, sequence=get_smiles_for_drug(pubchem_id))
 
-
+print("Ignored Drugs:")
 print("\n".join(failed_conversion))
 
 pairs, labels = generateDTPairs(dt_df)
