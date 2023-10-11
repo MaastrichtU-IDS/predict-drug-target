@@ -119,19 +119,18 @@ def get_predictions(drugs: list[str], targets: list[str], vectordb: VectorDB):
     print("DRUGSS", drug_embed)
     print(target_embed)
 
-    # Merge embeddings
+    # Merge embeddings, results should have 1792 columns (512 from drugs + 1280 from targets)
     df = pd.merge(drug_embed, target_embed, how="cross")
     df.columns = df.columns.astype(str)
-    # log.info("Merged embeddings should have 1792 columns (512 from drugs + 1280 from targets)")
-    # log.info(df)
     merged_embeddings = df.drop(columns=["drug", "target"])
     merged_embeddings.columns = range(merged_embeddings.shape[1]) # use default column names, same as during training
+    # log.info(df)
 
     # Get predicted score
     predicted_proba = model.predict_proba(merged_embeddings)
-
     df["score"] = predicted_proba[:, 1]  # Probability of class 1
     df = df.sort_values(by='score', ascending=False)
+
     # Convert to list of dicts
     scores = df[["drug", "target", "score"]].to_dict(orient="records")
     log.info(f"⚡ {BOLD}{len(df)}{END} interaction scores computed in {BOLD}{datetime.now() - time_start}{END}\n{df[['drug', 'target', 'score']].iloc[:10]}")

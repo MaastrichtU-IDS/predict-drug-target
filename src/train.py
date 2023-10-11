@@ -271,8 +271,9 @@ for _index, row in embeddings["drug"].iterrows():
     # pubchem = normalize_id_to_translator()
     vectordb.add("drug", pubchem_id, vector, sequence=get_smiles_for_drug(pubchem_id))
 
-print("Ignored Drugs:")
+print(f"{len(failed_conversion)} drugs ignored:")
 print("\n".join(failed_conversion))
+
 
 pairs, labels = generateDTPairs(dt_df)
 ndrugs = len(embeddings["drug"])

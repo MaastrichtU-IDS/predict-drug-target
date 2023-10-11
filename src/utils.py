@@ -41,14 +41,20 @@ def get_smiles_for_drug(drug_id: str):
         return comp.canonical_smiles
 
 
-def get_seq_for_target(ensembl_id: str):
+def get_seq_for_target(target_id: str):
     # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
-    if ensembl_id.lower().startswith("ensembl:"):
-        ensembl_id = ensembl_id[8:]
-    res = requests.get(
-        f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{ensembl_id}?offset=0&size=100&format=json"
-    ).json()
-    return res[0]["sequence"]["sequence"]
+    if target_id.lower().startswith("ensembl:"):
+        target_id = target_id[len("ensembl:"):]
+        res = requests.get(
+            f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json"
+        ).json()
+        return res[0]["sequence"]["sequence"]
+    if target_id.lower().startswith("uniprotkb:"):
+        target_id = target_id[len("uniprotkb:"):]
+        res = requests.get(
+            f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json"
+        ).json()
+        return res["sequence"]["value"]
 
 
 
