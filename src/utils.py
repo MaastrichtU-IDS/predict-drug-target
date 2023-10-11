@@ -1,7 +1,7 @@
 import logging
-from pubchempy import Compound
 
 import requests
+from pubchempy import Compound
 
 VECTORDB_MAX_LIMIT = 100000
 
@@ -10,7 +10,7 @@ EMBEDDINGS_SIZE_TARGET = 1280
 COLLECTIONS = [
     {"name": "drug", "size": EMBEDDINGS_SIZE_DRUG},
     {"name": "target", "size": EMBEDDINGS_SIZE_TARGET},
-] # Total 1792 features cols
+]  # Total 1792 features cols
 
 
 ## Instantiate logging utility
@@ -32,11 +32,11 @@ CYAN = "\033[36m"
 def get_smiles_for_drug(drug_id: str):
     # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
     if drug_id.lower().startswith("chembl.compound:"):
-        drug_id = drug_id[len("chembl.compound:"):]
+        drug_id = drug_id[len("chembl.compound:") :]
         res = requests.get(f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json").json()
         return res["molecule_structures"]["canonical_smiles"]
     if drug_id.lower().startswith("pubchem.compound:"):
-        drug_id = drug_id[len("pubchem.compound:"):]
+        drug_id = drug_id[len("pubchem.compound:") :]
         comp = Compound.from_cid(drug_id)
         return comp.canonical_smiles
 
@@ -44,18 +44,15 @@ def get_smiles_for_drug(drug_id: str):
 def get_seq_for_target(target_id: str):
     # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
     if target_id.lower().startswith("ensembl:"):
-        target_id = target_id[len("ensembl:"):]
+        target_id = target_id[len("ensembl:") :]
         res = requests.get(
             f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json"
         ).json()
         return res[0]["sequence"]["sequence"]
     if target_id.lower().startswith("uniprotkb:"):
-        target_id = target_id[len("uniprotkb:"):]
-        res = requests.get(
-            f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json"
-        ).json()
+        target_id = target_id[len("uniprotkb:") :]
+        res = requests.get(f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json").json()
         return res["sequence"]["value"]
-
 
 
 def normalize_id_to_translator(ids_list: list):
@@ -66,16 +63,8 @@ def normalize_id_to_translator(ids_list: list):
     converted_ids_obj = {}
     resolve_curies = requests.post(
         "https://nodenormalization-sri.renci.org/get_normalized_nodes",
-        json={
-            "curies": ids_list,
-            "conflate": True,
-            "description": False,
-            "drug_chemical_conflate": False
-        },
-        headers={
-            "accept": "application/json",
-            "Content-Type": "application/json"
-        },
+        json={"curies": ids_list, "conflate": True, "description": False, "drug_chemical_conflate": False},
+        headers={"accept": "application/json", "Content-Type": "application/json"},
         timeout=60,
     )
     resolve_curies.raise_for_status()

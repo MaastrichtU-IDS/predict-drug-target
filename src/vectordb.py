@@ -12,7 +12,7 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 
-from src.utils import BOLD, END, log, EMBEDDINGS_SIZE_DRUG, EMBEDDINGS_SIZE_TARGET
+from src.utils import BOLD, END, log
 
 
 # Define an abstract class VectorDB

@@ -11,7 +11,7 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
-from src.utils import log, normalize_id_to_translator, get_smiles_for_drug, get_seq_for_target, COLLECTIONS
+from src.utils import COLLECTIONS, get_smiles_for_drug, log, normalize_id_to_translator
 from src.vectordb import init_vectordb
 
 vectordb = init_vectordb(COLLECTIONS, recreate=True)
@@ -245,8 +245,6 @@ dt_df = loadDrugTargets(drug_target_path)
 today = date.today()
 results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
 agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
-
-
 
 
 ## Store all drugs vectors in the vector db

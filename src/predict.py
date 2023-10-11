@@ -7,18 +7,31 @@ import numpy as np
 import pandas as pd
 import torch
 
-from src.utils import BOLD, END, log, COLLECTIONS, EMBEDDINGS_SIZE_DRUG, EMBEDDINGS_SIZE_TARGET, get_smiles_for_drug, get_seq_for_target, VECTORDB_MAX_LIMIT
-from src.vectordb import init_vectordb, VectorDB
+from src.utils import (
+    BOLD,
+    COLLECTIONS,
+    EMBEDDINGS_SIZE_DRUG,
+    EMBEDDINGS_SIZE_TARGET,
+    END,
+    VECTORDB_MAX_LIMIT,
+    get_seq_for_target,
+    get_smiles_for_drug,
+    log,
+)
+from src.vectordb import VectorDB, init_vectordb
 
 # TODO: use UniProtKB for Targets
+
 
 def load_model(path: str = "models/drug_target.pkl"):
     with open(path, "rb") as f:
         return pickle.load(f)
 
 
-def compute_drug_embedding(vectordb: VectorDB, drugs: list[str]|None = None, length: int = EMBEDDINGS_SIZE_DRUG) -> pd.DataFrame:
-    df = pd.DataFrame(columns=["drug"] + list(range(length)))
+def compute_drug_embedding(
+    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG
+) -> pd.DataFrame:
+    df = pd.DataFrame(columns=["drug", *list(range(length))])
     os.makedirs("tmp", exist_ok=True)
     os.chdir("MolecularTransformerEmbeddings")
     if not drugs:
@@ -59,13 +72,17 @@ def compute_drug_embedding(vectordb: VectorDB, drugs: list[str]|None = None, len
     return df
 
 
-def compute_target_embedding(vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET) -> pd.DataFrame:
-    df = pd.DataFrame(columns=["target"] + list(range(length)))
+def compute_target_embedding(
+    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET
+) -> pd.DataFrame:
+    df = pd.DataFrame(columns=["target", *list(range(length))])
     if not targets:
         # Get all targets
         targets_list = vectordb.get("target", None, limit=VECTORDB_MAX_LIMIT)
         log.info(f"Retrieved {len(targets_list)} targets")
-        targets_list = [{"target": target.payload["id"], **dict(enumerate(target.vector, 1))} for target in targets_list]
+        targets_list = [
+            {"target": target.payload["id"], **dict(enumerate(target.vector, 1))} for target in targets_list
+        ]
         df = pd.DataFrame.from_records(targets_list)
         return df
 
@@ -123,17 +140,19 @@ def get_predictions(drugs: list[str], targets: list[str], vectordb: VectorDB):
     df = pd.merge(drug_embed, target_embed, how="cross")
     df.columns = df.columns.astype(str)
     merged_embeddings = df.drop(columns=["drug", "target"])
-    merged_embeddings.columns = range(merged_embeddings.shape[1]) # use default column names, same as during training
+    merged_embeddings.columns = range(merged_embeddings.shape[1])  # use default column names, same as during training
     # log.info(df)
 
     # Get predicted score
     predicted_proba = model.predict_proba(merged_embeddings)
     df["score"] = predicted_proba[:, 1]  # Probability of class 1
-    df = df.sort_values(by='score', ascending=False)
+    df = df.sort_values(by="score", ascending=False)
 
     # Convert to list of dicts
     scores = df[["drug", "target", "score"]].to_dict(orient="records")
-    log.info(f"⚡ {BOLD}{len(df)}{END} interaction scores computed in {BOLD}{datetime.now() - time_start}{END}\n{df[['drug', 'target', 'score']].iloc[:10]}")
+    log.info(
+        f"⚡ {BOLD}{len(df)}{END} interaction scores computed in {BOLD}{datetime.now() - time_start}{END}\n{df[['drug', 'target', 'score']].iloc[:10]}"
+    )
     return scores
 
 
