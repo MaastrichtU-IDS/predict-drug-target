@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 requires-python = ">=3.10"
 version = "0.0.1"
-name = "drug-target-emb-predict"
+name = "predict-drug-target"
 description = "This project uses ESM2 protein embeddings and MolecularTransformer drug embeddings to train a linear classifier to predict drug-targets."
 readme = "README.md"
 license = { file = "LICENSE.txt" }
@@ -28,7 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "trapi-predict-kit",
+    "trapi-predict-kit[web]",
     "fair-esm",
     "bio",
     "scipy",
@@ -60,11 +60,11 @@ test = [
 
 
 [project.urls]
-Homepage = "https://github.com/micheldumontier/drug-target-emb-predict"
-Documentation = "https://github.com/micheldumontier/drug-target-emb-predict"
-History = "https://github.com/micheldumontier/drug-target-emb-predict/releases"
-Tracker = "https://github.com/micheldumontier/drug-target-emb-predict/issues"
-Source = "https://github.com/micheldumontier/drug-target-emb-predict"
+Homepage = "https://github.com/MaastrichtU-IDS/predict-drug-target"
+Documentation = "https://github.com/MaastrichtU-IDS/predict-drug-target"
+History = "https://github.com/MaastrichtU-IDS/predict-drug-target/releases"
+Tracker = "https://github.com/MaastrichtU-IDS/predict-drug-target/issues"
+Source = "https://github.com/MaastrichtU-IDS/predict-drug-target"
 
 
 # ENVIRONMENTS AND SCRIPTS
@@ -76,6 +76,7 @@ features = [
 [tool.hatch.envs.default.scripts]
 train = "python3 src/train.py {args}"
 predict = "python3 src/predict.py {args}"
+api = "uvicorn src.api:app --host 0.0.0.0 --reload {args}"
 fmt = [
     "black src/",
     "ruff src/ --fix",

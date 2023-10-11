@@ -1,4 +1,4 @@
-# drug-target-emb-predict
+# predict-drug-target
 
 This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict drug-targets.
 
