@@ -229,92 +229,99 @@ def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pro
 
 ######
 
-embeddings = {}
-protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
-embeddings["target"] = loadProteinEmbeddings(protein_embeddings_path)
+def train():
+    embeddings = {}
+    protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
+    embeddings["target"] = loadProteinEmbeddings(protein_embeddings_path)
 
-drug_labels_path = "./data/download/drugbank_drugs.csv"
-drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
-drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
-embeddings["drug"] = drug_embeddings
+    drug_labels_path = "./data/download/drugbank_drugs.csv"
+    drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
+    drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
+    embeddings["drug"] = drug_embeddings
 
-drug_target_path = "./data/download/drugbank_drug_targets.csv"
-dt_df = loadDrugTargets(drug_target_path)
+    drug_target_path = "./data/download/drugbank_drug_targets.csv"
+    dt_df = loadDrugTargets(drug_target_path)
 
-today = date.today()
-results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
-agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
-
-
-## Store all drugs vectors in the vector db
-
-drugs_list = [f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]]
-pubchem_ids = normalize_id_to_translator(drugs_list)
-# 416 drugs dont have a Pubchem ID as pref ID, we ignore them for now
-
-failed_conversion = []
-# Add drug embeddings to the vector db
-vector_list = []
-for _index, row in embeddings["drug"].iterrows():
-    log.info(f"Drug {_index}/{len(embeddings['drug'])}")
-    vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
-    # if pubchem_id not in pubchem_ids:
-    #     failed_conversion.append(row['drug'])
-    #     continue
-    drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
-    if not drug_id or not drug_id.lower().startswith("pubchem.compound:"):
-        failed_conversion.append(f"{row['drug']} > {drug_id}")
-        continue
-
-    # pubchem = normalize_id_to_translator()
-    drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-    vector_list.append({
-        "vector": vector,
-        "payload": {
-            "id": drug_id,
-            "sequence":drug_smiles,
-            "label": drug_label
-        }
-    })
-
-vectordb.add("drug", vector_list)
-
-print(f"{len(failed_conversion)} drugs ignored:")
-print("\n".join(failed_conversion))
+    today = date.today()
+    results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
+    agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
 
 
-pairs, labels = generateDTPairs(dt_df)
-ndrugs = len(embeddings["drug"])
-ntargets = len(embeddings["target"])
-print(f"Drugs: {ndrugs}")
-print(f"Targets: {ntargets}")
-unique, counts = np.unique(labels, return_counts=True)
-ndrugtargets = counts[1]
-print(f"Drug-Targets: {ndrugtargets}")
+    ## Store all drugs vectors in the vector db
 
-# nb_model = GaussianNB()
-# lr_model = linear_model.LogisticRegression()
-rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
+    drugs_list = [f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]]
+    pubchem_ids = normalize_id_to_translator(drugs_list)
+    # 416 drugs dont have a Pubchem ID as pref ID, we ignore them for now
 
-# clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-clfs = [("Random Forest", rf_model)]
+    failed_conversion = []
+    # Add drug embeddings to the vector db
+    vector_list = []
+    for _index, row in embeddings["drug"].iterrows():
+        log.info(f"Drug {_index}/{len(embeddings['drug'])}")
+        vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
+        # if pubchem_id not in pubchem_ids:
+        #     failed_conversion.append(row['drug'])
+        #     continue
+        drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
+        if not drug_id or not drug_id.lower().startswith("pubchem.compound:"):
+            failed_conversion.append(f"{row['drug']} > {drug_id}")
+            continue
 
-n_seed = 100
-n_fold = 10
-n_run = 2
-n_proportion = 1
-sc = None
-all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
-all_scores_df.to_csv(results_file, sep=",", index=False)
+        # pubchem = normalize_id_to_translator()
+        drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+        vector_list.append({
+            "vector": vector,
+            "payload": {
+                "id": drug_id,
+                "sequence":drug_smiles,
+                "label": drug_label
+            }
+        })
 
-agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
-agg_df.to_csv(agg_results_file, sep=",", index=False)
-print("overall:")
-print(agg_df)
+    vectordb.add("drug", vector_list)
 
-os.makedirs("models", exist_ok=True)
-with open("models/drug_target.pkl", "wb") as f:
-    pickle.dump(rf_model, f)
+    print(f"{len(failed_conversion)} drugs ignored:")
+    print("\n".join(failed_conversion))
 
-with open("models/embeddings.pkl", "wb") as f:
-    pickle.dump(embeddings, f)
+
+    pairs, labels = generateDTPairs(dt_df)
+    ndrugs = len(embeddings["drug"])
+    ntargets = len(embeddings["target"])
+    print(f"Drugs: {ndrugs}")
+    print(f"Targets: {ntargets}")
+    unique, counts = np.unique(labels, return_counts=True)
+    ndrugtargets = counts[1]
+    print(f"Drug-Targets: {ndrugtargets}")
+
+    # nb_model = GaussianNB()
+    # lr_model = linear_model.LogisticRegression()
+    rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
+
+    # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
+    clfs = [("Random Forest", rf_model)]
+
+    n_seed = 100
+    n_fold = 10
+    n_run = 2
+    n_proportion = 1
+    sc = None
+    all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
+    all_scores_df.to_csv(results_file, sep=",", index=False)
+
+    agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
+    agg_df.to_csv(agg_results_file, sep=",", index=False)
+    print("overall:")
+    print(agg_df)
+
+    os.makedirs("models", exist_ok=True)
+    with open("models/drug_target.pkl", "wb") as f:
+        pickle.dump(rf_model, f)
+
+    with open("models/embeddings.pkl", "wb") as f:
+        pickle.dump(embeddings, f)
+
+    return agg_df.to_dict(orient="records")
+
+
+if __name__ == "__main__":
+    train()
