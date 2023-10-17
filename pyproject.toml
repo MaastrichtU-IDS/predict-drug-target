@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 requires-python = ">=3.10"
 version = "0.0.1"
 name = "predict-drug-target"
-description = "This project uses ESM2 protein embeddings and MolecularTransformer drug embeddings to train a linear classifier to predict drug-targets."
+description = "This project uses ESM2 protein embeddings and MolecularTransformer drug embeddings to train a linear classifier to predict potential drug-targets interactions."
 readme = "README.md"
 license = { file = "LICENSE.txt" }
 authors = [
@@ -37,13 +37,13 @@ dependencies = [
     "matplotlib",
     "scikit-learn",
     "ipykernel",
-    "findspark",
-    "pyspark",
-    "notebook",
     "numpy",
     "requests",
     "qdrant-client",
     "PubChemPy",
+    # "findspark",
+    # "pyspark",
+    # "notebook",
 ]
 
 

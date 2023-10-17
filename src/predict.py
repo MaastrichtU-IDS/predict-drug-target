@@ -5,7 +5,6 @@ from datetime import datetime
 import esm
 import numpy as np
 import pandas as pd
-from src import vectordb
 import torch
 from trapi_predict_kit import PredictInput, PredictOutput, trapi_predict
 

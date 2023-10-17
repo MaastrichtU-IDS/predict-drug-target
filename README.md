@@ -1,27 +1,41 @@
-# predict-drug-target
+# 💊🎯 predict-drug-target
 
-This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict drug-targets.
+This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict potential drug-targets interactions, where targets are proteins.
 
-Computed vectors are stored in a vector database: https://qdrant.137.120.31.148.nip.io/dashboard
+Services deployed:
 
-## Install
+* TRAPI endpoint for drug-target interaction prediction: [predict-drug-target.137.120.31.160.nip.io](https://predict-drug-target.137.120.31.160.nip.io)
 
-Create and activate local environment
+*  [Qdrant](https://qdrant.tech/) vector database to store the computed embeddings for drugs and targets: [qdrant.137.120.31.148.nip.io/dashboard](https://qdrant.137.120.31.148.nip.io/dashboard)
+
+## 📥 Install
+
+If you are **not in a docker container** you might want to create and activate local environment before installing the module:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-Install requirements
+Install the module:
 
 ```bash
 pip install -e .
 ```
 
-## Prepare data and embeddings
+## 🍳 Prepare data and embeddings
+
+Run the complete pipeline to download data and generated embeddings for drugs/target:
+
+```bash
+./prepare.sh
+```
+
+
+<details><summary>Or click here to follow the pipeline step by step</summary>
 
 Query the Bio2RDF endpoint to get drugs and their smiles, targets and their protein sequences, and the set of known drug-target pairs
+
 ```bash
 ./get_bio2rdf_data.sh
 ```
@@ -57,7 +71,9 @@ mv embeddings/drugbank_smiles.npz ../data/vectors/
 cd ..
 ```
 
-## Run training
+</details>
+
+## 🏋️ Run training
 
 Train the model:
 
@@ -65,9 +81,9 @@ Train the model:
 python src/train.py
 ```
 
-Results are in results folder
+> Results are in the `results/` folder, model pickle goes to the `models/` folder
 
-## Get predictions
+## 🔮 Get predictions
 
 Run the prediction workflow for 2 entities:
 
@@ -82,13 +98,44 @@ Users provides drugs and targets using their CHEMBL or Ensembl IDs, the script w
 - The function currently returns a list of drug/targets pair and their interaction prediction score
 - When the embeddings need to be computed it takes ~30s per embeddings. But if the embeddings are already stored in the vector database then the whole prediction process takes less than 2s
 
-## Code formatting
+## ✅ Run tests
+
+Run the code formatting (black and ruff):
 
 ```bash
 hatch run fmt
 ```
 
-## Using a vector database
+Run the tests (requires to first run the training to generate the model):
+
+```bash
+pytest
+# Or
+hatch run test
+```
+
+## 🐳 Deployment
+
+With docker compose. First run the training to generate the model
+
+### Deploy the API
+
+Deploy the TRAPI endpoint on a GPU server:
+
+```bash
+docker compose up -d --build --force-recreate
+```
+
+### Deploy the vector db
+
+The vectordb is used to store embeddings for the entities and make querying faster. It is currently hosted on a server.
+
+To run it locally, edit the host in the `src/predict.py` script. And use the `docker-compose.yml` and config files from the `vectordb` folder (make changes as needed)
+
+```bash
+cd vectordb
+docker compose up -d
+```
 
 ### Which vector db?
 
@@ -103,7 +150,7 @@ There are a few solutions, more or less mature, here are the runner ups:
 * **Weaviate**: more battery included, but slower, and heavier. As a GraphQL API (not sure if it's better than a well thought good ol' REST-like API tbh)
     * Similarity search in weaviate seems to be hidden under some additional abstration layers: https://weaviate.io/developers/weaviate/search/similarity, which can make the whole thing harder to curb to our needs. But it seems to also support dot, cosine, and euclid
     * GraphQL API (but is it really needed?)
-* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116)). How could they raise so much money from VCs? (there is a [running joke about this](https://github.com/jdagdelen/hyperDB) actually)
+* **ChromaDB**: more battery included. Does not seems really fast. The code is simplist, all in python, not sure what they are actually bringing (use SQLite as db, parquet for persistence, [similarity search seems to be in memory python](https://github.com/chroma-core/chroma/blob/e81cc9f361e5aa072534a1fbbc483da406b54848/chromadb/segment/impl/vector/local_hnsw.py#L116)).
 * **pgvector**: a vertordb in postgres, really nice if you already use SQL or postgres in your system. But for our needs I feel like a simpler NoSQL system would be easier to use and maintain
 
 
@@ -112,14 +159,7 @@ Some references:
 - https://qdrant.tech/benchmarks/
 - https://lakefs.io/blog/12-vector-databases-2023/
 
+## ☑️ TODO
 
-### Deploy the vector db
-
-The vectordb is used to store embeddings for the entities and make querying faster. It is currently hosted on a server.
-
-To run it locally, edit the host in the `src/predict.py` script. And use the `docker-compose.yml` and config files from the `vectordb` folder (make changes as needed)
-
-```bash
-cd vectordb
-docker compose up -d
-```
+- [ ] Store the built model on HuggingFace?
+- [ ] Re-train the model on more data from UniProt?
