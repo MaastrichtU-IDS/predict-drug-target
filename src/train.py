@@ -4,7 +4,6 @@ import pickle
 import random
 from datetime import date
 
-import numpy
 import numpy as np
 import pandas as pd
 import torch
@@ -278,7 +277,7 @@ ndrugs = len(embeddings["drug"])
 ntargets = len(embeddings["target"])
 print(f"Drugs: {ndrugs}")
 print(f"Targets: {ntargets}")
-unique, counts = numpy.unique(labels, return_counts=True)
+unique, counts = np.unique(labels, return_counts=True)
 ndrugtargets = counts[1]
 print(f"Drug-Targets: {ndrugtargets}")
 

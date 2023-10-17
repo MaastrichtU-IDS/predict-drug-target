@@ -139,7 +139,10 @@ def compute_target_embedding(
             "object": "biolink:Protein",
         },
     ],
-    nodes={"biolink:Protein": {"id_prefixes": ["UniProtKB", "ENSEMBL"]}, "biolink:Drug": {"id_prefixes": ["PUBCHEM.COMPOUND"]}},
+    nodes={
+        "biolink:Protein": {"id_prefixes": ["UniProtKB", "ENSEMBL"]},
+        "biolink:Drug": {"id_prefixes": ["PUBCHEM.COMPOUND"]},
+    },
 )
 def get_drug_target_predictions(request: PredictInput) -> PredictOutput:
     time_start = datetime.now()

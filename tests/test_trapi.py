@@ -3,32 +3,27 @@ import json
 from fastapi.testclient import TestClient
 
 from trapi_predict_kit import settings
+from reasoner_validator.validator import TRAPIResponseValidator
 
 from src.api import app, trapi_example
 
+
 client = TestClient(app)
 
-validator = None
-try:
-    from reasoner_validator.validator import TRAPIResponseValidator
-
-    # NOTE: Validate only prod because validate requires py3.9+ and OpenPredict requires 3.8
-    validator = TRAPIResponseValidator(
-        trapi_version=settings.TRAPI_VERSION,
-        # If None, then the current Biolink Model Toolkit default release applies
-        biolink_version=settings.BIOLINK_VERSION,
-        # 'sources' are set to trigger checking of expected edge knowledge source provenance
-        # sources={
-        #     "ara_source": "infores:molepro",
-        #     "kp_source": "infores:knowledge-collaboratory",
-        #     "kp_source_type": "primary"
-        # },
-        # None let the system decide the default validation strictness by validation context
-        strict_validation=None,
-    )
-except Exception:
-    print("⚠️ reasoner-validator not found, not running TRAPI response validation checks")
-
+# NOTE: Validate only prod because validate requires py3.9+ and OpenPredict requires 3.8
+validator = TRAPIResponseValidator(
+    trapi_version=settings.TRAPI_VERSION,
+    # If None, then the current Biolink Model Toolkit default release applies
+    biolink_version=settings.BIOLINK_VERSION,
+    # 'sources' are set to trigger checking of expected edge knowledge source provenance
+    # sources={
+    #     "ara_source": "infores:molepro",
+    #     "kp_source": "infores:knowledge-collaboratory",
+    #     "kp_source_type": "primary"
+    # },
+    # None let the system decide the default validation strictness by validation context
+    strict_validation=None,
+)
 
 def check_trapi_compliance(response):
     if validator:

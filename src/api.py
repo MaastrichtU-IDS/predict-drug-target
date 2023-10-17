@@ -13,15 +13,13 @@ trapi_example = {
         "query_graph": {
             "edges": {"e01": {"object": "n1", "predicates": ["biolink:interacts_with"], "subject": "n0"}},
             "nodes": {
-                "n0": {"categories": ["biolink:Drug"],
-                    "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
-                },
+                "n0": {"categories": ["biolink:Drug"], "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]},
                 "n1": {
                     "categories": ["biolink:Protein"],
                     "ids": ["UniProtKB:P12345", "ENSEMBL:ENSP00000351276"],
                     # "ENSEMBL:ENSP00000310301"
-                }
-            }
+                },
+            },
         }
     },
     "query_options": {"max_score": 1, "min_score": 0.1, "n_results": 10},

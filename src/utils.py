@@ -28,12 +28,16 @@ RED = "\033[91m"
 YELLOW = "\033[33m"
 CYAN = "\033[36m"
 
+TIMEOUT = 30
+
 
 def get_smiles_for_drug(drug_id: str):
     # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
     if drug_id.lower().startswith("chembl.compound:"):
         drug_id = drug_id[len("chembl.compound:") :]
-        res = requests.get(f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json").json()
+        res = requests.get(
+            f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
+        ).json()
         return res["molecule_structures"]["canonical_smiles"]
     if drug_id.lower().startswith("pubchem.compound:"):
         drug_id = drug_id[len("pubchem.compound:") :]
@@ -46,12 +50,13 @@ def get_seq_for_target(target_id: str):
     if target_id.lower().startswith("ensembl:"):
         target_id = target_id[len("ensembl:") :]
         res = requests.get(
-            f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json"
+            f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json",
+            timeout=TIMEOUT,
         ).json()
         return res[0]["sequence"]["sequence"]
     if target_id.lower().startswith("uniprotkb:"):
         target_id = target_id[len("uniprotkb:") :]
-        res = requests.get(f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json").json()
+        res = requests.get(f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json", timeout=TIMEOUT).json()
         return res["sequence"]["value"]
 
 
@@ -65,7 +70,7 @@ def normalize_id_to_translator(ids_list: list):
         "https://nodenormalization-sri.renci.org/get_normalized_nodes",
         json={"curies": ids_list, "conflate": True, "description": False, "drug_chemical_conflate": False},
         headers={"accept": "application/json", "Content-Type": "application/json"},
-        timeout=60,
+        timeout=TIMEOUT,
     )
     resolve_curies.raise_for_status()
     # Get corresponding OMIM IDs for MONDO IDs if match
