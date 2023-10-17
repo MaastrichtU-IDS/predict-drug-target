@@ -5,7 +5,9 @@ from datetime import datetime
 import esm
 import numpy as np
 import pandas as pd
+from src import vectordb
 import torch
+from trapi_predict_kit import PredictInput, PredictOutput, trapi_predict
 
 from src.utils import (
     BOLD,
@@ -20,7 +22,7 @@ from src.utils import (
 )
 from src.vectordb import VectorDB, init_vectordb
 
-# TODO: use UniProtKB for Targets
+# VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
 
 
 def load_model(path: str = "models/drug_target.pkl"):
@@ -32,8 +34,6 @@ def compute_drug_embedding(
     vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG
 ) -> pd.DataFrame:
     df = pd.DataFrame(columns=["drug", *list(range(length))])
-    os.makedirs("tmp", exist_ok=True)
-    os.chdir("MolecularTransformerEmbeddings")
     if not drugs:
         # Get all drugs takes ~10s for 5k5 drugs
         drugs_list = vectordb.get("drug", None, limit=VECTORDB_MAX_LIMIT)
@@ -42,6 +42,8 @@ def compute_drug_embedding(
         df = pd.DataFrame.from_records(drugs_list)
         return df
 
+    os.makedirs("tmp", exist_ok=True)
+    os.chdir("MolecularTransformerEmbeddings")
     for drug_id in drugs:
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -69,6 +71,7 @@ def compute_drug_embedding(
         vectordb.add("drug", drug_id, embeddings, drug_smiles)
         embeddings.insert(0, drug_id)
         df.loc[len(df)] = embeddings
+    os.chdir("..")
     return df
 
 
@@ -125,16 +128,31 @@ def compute_target_embedding(
     return df
 
 
-def get_predictions(drugs: list[str], targets: list[str], vectordb: VectorDB):
+@trapi_predict(
+    path="/predict",
+    name="Get predicted targets for a given drug",
+    description="Return the predicted targets for a given entity: drug (PubChem ID) or target (UniProtKB ID), with confidence scores.",
+    edges=[
+        {
+            "subject": "biolink:Drug",
+            "predicate": "biolink:interacts_with",
+            "inverse": "biolink:interacts_with",
+            "object": "biolink:Protein",
+        },
+    ],
+    nodes={"biolink:Disease": {"id_prefixes": ["OMIM"]}, "biolink:Drug": {"id_prefixes": ["DRUGBANK"]}},
+)
+def get_drug_target_predictions(request: PredictInput) -> PredictOutput:
+    vectordb = init_vectordb(COLLECTIONS, recreate=False)
     time_start = datetime.now()
     model = load_model()
 
     # Compute embeddings for drugs and target, based on their smiles and amino acid sequence
-    drug_embed = compute_drug_embedding(vectordb, drugs)
-    target_embed = compute_target_embedding(vectordb, targets)
+    drug_embed = compute_drug_embedding(vectordb, request.subjects)
+    target_embed = compute_target_embedding(vectordb, request.objects)
 
-    print("DRUGSS", drug_embed)
-    print(target_embed)
+    # print("DRUGSS", drug_embed)
+    # print(target_embed)
 
     # Merge embeddings, results should have 1792 columns (512 from drugs + 1280 from targets)
     df = pd.merge(drug_embed, target_embed, how="cross")
@@ -147,21 +165,11 @@ def get_predictions(drugs: list[str], targets: list[str], vectordb: VectorDB):
     predicted_proba = model.predict_proba(merged_embeddings)
     df["score"] = predicted_proba[:, 1]  # Probability of class 1
     df = df.sort_values(by="score", ascending=False)
-
+    df.rename(columns={"drug": "subject", "target": "object"}, inplace=True)
+    score_df = df[["subject", "object", "score"]]
     # Convert to list of dicts
-    scores = df[["drug", "target", "score"]].to_dict(orient="records")
     log.info(
-        f"⚡ {BOLD}{len(df)}{END} interaction scores computed in {BOLD}{datetime.now() - time_start}{END}\n{df[['drug', 'target', 'score']].iloc[:10]}"
+        f"⚡ {BOLD}{len(df)}{END} interaction scores computed in {BOLD}{datetime.now() - time_start}{END}\n{score_df.iloc[:10]}"
     )
-    return scores
-
-
-if __name__ == "__main__":
-    vectordb = init_vectordb(COLLECTIONS, recreate=False)
-    drugs = ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
-    # drugs = None
-    # targets = ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"]
-    targets = []
-    # TODO: Pass None to get all targets or all drugs
-    predictions = get_predictions(drugs, targets, vectordb)
-    # print(predictions)
+    scores_list = score_df.to_dict(orient="records")
+    return {"hits": scores_list, "count": len(scores_list)}

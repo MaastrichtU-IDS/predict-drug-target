@@ -4,3 +4,4 @@ MolecularTransformerEmbeddings
 src/__pycache__
 tmp/
 models/
+__pycache__/

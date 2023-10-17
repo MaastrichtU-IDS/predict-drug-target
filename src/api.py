@@ -1,43 +1,30 @@
 import logging
 
-from trapi_predict_kit import TRAPI, PredictOptions, PredictOutput, settings, trapi_predict
+from trapi_predict_kit import TRAPI, settings
+
+from src.predict import get_drug_target_predictions
 
 log_level = logging.INFO
 logging.basicConfig(level=log_level)
 
 
-@trapi_predict(
-    path="/predict",
-    name="Get predicted targets for a given entity",
-    description="Return the predicted targets for a given entity: drug (DrugBank ID) or disease (OMIM ID), with confidence scores.",
-    edges=[
-        {
-            "subject": "biolink:Drug",
-            "predicate": "biolink:treats",
-            "object": "biolink:Disease",
-        },
-        {
-            "subject": "biolink:Disease",
-            "predicate": "biolink:treated_by",
-            "object": "biolink:Drug",
-        },
-    ],
-    nodes={"biolink:Disease": {"id_prefixes": ["OMIM"]}, "biolink:Drug": {"id_prefixes": ["DRUGBANK"]}},
-)
-def get_predictions(input_id: str, options: PredictOptions) -> PredictOutput:
-    # Add the code the load the model and get predictions here
-    predictions = {
-        "hits": [
-            {
-                "id": "drugbank:DB00001",
-                "type": "biolink:Drug",
-                "score": 0.12345,
-                "label": "Leipirudin",
-            }
-        ],
-        "count": 1,
-    }
-    return predictions
+trapi_example = {
+    "message": {
+        "query_graph": {
+            "edges": {"e01": {"object": "n1", "predicates": ["biolink:interacts_with"], "subject": "n0"}},
+            "nodes": {
+                "n0": {"categories": ["biolink:Drug"],
+                    "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
+                },
+                "n1": {
+                    "categories": ["biolink:Protein"],
+                    "ids": ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"],
+                },
+            },
+        }
+    },
+    "query_options": {"max_score": 1, "min_score": 0.1, "n_results": 10},
+}
 
 
 openapi_info = {
@@ -77,13 +64,15 @@ openapi_info = {
 }
 
 app = TRAPI(
-    predict_endpoints=[get_predictions],
+    predict_endpoints=[get_drug_target_predictions],
     info=openapi_info,
     title="Predict Drug Target interactions TRAPI",
     version="1.0.0",
     openapi_version="3.0.1",
-    description="""Machine learning models to produce predictions that can be integrated to Translator Reasoner APIs.
+    description="""Get predicted protein targets for a given drug
 \n\nService supported by the [NCATS Translator project](https://ncats.nih.gov/translator/about)""",
     itrb_url_prefix="predict-drug-target",
     dev_server_url="https://predict-drug-target.137.120.31.160.nip.io",
+    trapi_example=trapi_example,
+    # trapi_description=""
 )
