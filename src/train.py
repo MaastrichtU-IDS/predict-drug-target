@@ -13,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold
 from src.utils import COLLECTIONS, get_smiles_for_drug, log, normalize_id_to_translator
 from src.vectordb import init_vectordb
 
-vectordb = init_vectordb(COLLECTIONS, recreate=True)
+vectordb = init_vectordb(COLLECTIONS, recreate=False)
 
 
 def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
@@ -266,7 +266,8 @@ for _index, row in embeddings["drug"].iterrows():
         continue
 
     # pubchem = normalize_id_to_translator()
-    vectordb.add("drug", pubchem_id, vector, sequence=get_smiles_for_drug(pubchem_id))
+    drug_smiles, drug_label = get_smiles_for_drug(pubchem_id)
+    vectordb.add("drug", pubchem_id, vector=vector, sequence=drug_smiles, label=drug_label)
 
 print(f"{len(failed_conversion)} drugs ignored:")
 print("\n".join(failed_conversion))

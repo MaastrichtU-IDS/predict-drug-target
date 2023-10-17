@@ -38,11 +38,11 @@ def get_smiles_for_drug(drug_id: str):
         res = requests.get(
             f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
         ).json()
-        return res["molecule_structures"]["canonical_smiles"]
+        return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
     if drug_id.lower().startswith("pubchem.compound:"):
         drug_id = drug_id[len("pubchem.compound:") :]
         comp = Compound.from_cid(drug_id)
-        return comp.canonical_smiles
+        return comp.canonical_smiles, comp.iupac_name
 
 
 def get_seq_for_target(target_id: str):
@@ -53,11 +53,11 @@ def get_seq_for_target(target_id: str):
             f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json",
             timeout=TIMEOUT,
         ).json()
-        return res[0]["sequence"]["sequence"]
+        return res[0]["sequence"]["sequence"], res[0]["protein"]["recommendedName"]["fullName"]["value"]
     if target_id.lower().startswith("uniprotkb:"):
         target_id = target_id[len("uniprotkb:") :]
         res = requests.get(f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json", timeout=TIMEOUT).json()
-        return res["sequence"]["value"]
+        return res["sequence"]["value"], res["proteinDescription"]["recommendedName"]["fullName"]["value"]
 
 
 def normalize_id_to_translator(ids_list: list):

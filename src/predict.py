@@ -53,9 +53,8 @@ def compute_drug_embedding(
             df.loc[len(df)] = embeddings
             continue
 
-        log.info(f"⏳💊 Drug {drug_id} not found in VectorDB, computing its embeddings")
-        drug_smiles = get_smiles_for_drug(drug_id)
-        print(f"drug_smiles! {drug_id} {drug_smiles}")
+        drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+        log.info(f"⏳💊 Drug {drug_id} not found in VectorDB, computing its embeddings from SMILES {drug_smiles}")
         with open("../tmp/drug_smiles.txt", "w") as f:
             f.write(drug_smiles)
         os.system("python embed.py --data_path=../tmp/drug_smiles.txt")
@@ -67,7 +66,8 @@ def compute_drug_embedding(
         vectors = np.stack([emb.mean(axis=0) for emb in gen_embeddings])
         # In this case we vectorize one by one, so only 1 row in the array
         embeddings = vectors[0].tolist()
-        vectordb.add("drug", drug_id, embeddings, drug_smiles)
+        # TODO: add label also?
+        vectordb.add("drug", drug_id, vector=embeddings, sequence=drug_smiles, label=drug_label)
         embeddings.insert(0, drug_id)
         df.loc[len(df)] = embeddings
     os.chdir("..")
@@ -100,7 +100,7 @@ def compute_target_embedding(
 
         log.info(f"⏳🎯 Target {target_id} not found in VectorDB, computing its embeddings")
         # TODO: perform bulk compute when multiple embeddings are not cached
-        target_seq = get_seq_for_target(target_id)
+        target_seq, target_label = get_seq_for_target(target_id)
         # Load ESM-2 model
         model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
         batch_converter = alphabet.get_batch_converter()
@@ -121,7 +121,7 @@ def compute_target_embedding(
 
         target_embeddings = torch.stack(sequence_representations, dim=0).numpy()  # numpy.ndarray 3775 x 1280
         embeddings = target_embeddings[0].tolist()
-        vectordb.add("target", target_id, embeddings, target_seq)
+        vectordb.add("target", target_id, vector=embeddings, sequence=target_seq, label=target_label)
         embeddings.insert(0, target_id)
         df.loc[len(df)] = embeddings
     return df

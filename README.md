@@ -1,4 +1,4 @@
-# 💊🎯 predict-drug-target
+# 💊🎯 Predict drug target interactions
 
 This project uses [ESM2](https://github.com/facebookresearch/esm) protein embeddings and [MolecularTransformer](https://github.com/mpcrlab/MolecularTransformerEmbeddings) drug embeddings to train a linear classifier to predict potential drug-targets interactions, where targets are proteins.
 
@@ -112,6 +112,11 @@ Run the tests (requires to first run the training to generate the model):
 pytest
 # Or
 hatch run test
+```
+
+Compile the `requirements.txt` file with pinned versions:
+```bash
+hatch run requirements
 ```
 
 ## 🐳 Deployment

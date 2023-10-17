@@ -88,11 +88,13 @@ class QdrantDB(VectorDB):
                     )
 
     def add(
-        self, collection_name: str, entity_id: str, vector: list[float], sequence: str | None = None
+        self, collection_name: str, entity_id: str, vector: list[float], sequence: str | None = None, label: str | None = None
     ) -> UpdateResult:
         payload = {"id": entity_id}
         if sequence:
             payload["sequence"] = sequence
+        if label:
+            payload["label"] = label
         operation_info = self.client.upsert(
             collection_name=collection_name,
             wait=True,
