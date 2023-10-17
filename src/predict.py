@@ -6,7 +6,7 @@ import esm
 import numpy as np
 import pandas as pd
 import torch
-from molecular_transformer import get_smiles_embeddings
+from smiles_transformer import get_smiles_embeddings
 from trapi_predict_kit import PredictInput, PredictOutput, trapi_predict
 
 from src.utils import (

@@ -42,13 +42,7 @@ dependencies = [
     "requests",
     "qdrant-client",
     "PubChemPy",
-    # "findspark",
-    # "pyspark",
-    # "notebook",
 ]
-
-
-
 
 [project.optional-dependencies]
 test = [
