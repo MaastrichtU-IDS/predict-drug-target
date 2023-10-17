@@ -75,6 +75,12 @@ cd ..
 
 ## 🏋️ Run training
 
+To force using a specific GPU set the environment variable `CUDA_VISIBLE_DEVICES` (starting from 0, so if you have 3 GPUs you can choose between 0,1 and 2):
+
+```bash
+export CUDA_VISIBLE_DEVICES=1
+```
+
 Train the model:
 
 ```bash

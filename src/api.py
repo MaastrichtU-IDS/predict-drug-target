@@ -3,6 +3,8 @@ import logging
 from trapi_predict_kit import TRAPI, settings
 
 from src.predict import get_drug_target_predictions
+from src.utils import COLLECTIONS
+from src.vectordb import init_vectordb
 
 log_level = logging.INFO
 logging.basicConfig(level=log_level)
@@ -76,3 +78,12 @@ app = TRAPI(
     trapi_example=trapi_example,
     # trapi_description=""
 )
+
+@app.post(
+    "/reset-vectordb",
+    name="Reset vector database",
+    description="Reset the collections in the vectordb"
+)
+def reset_db(api_key: str):
+    init_vectordb(COLLECTIONS, recreate=True, api_key=api_key)
+    return {"status": "ok"}

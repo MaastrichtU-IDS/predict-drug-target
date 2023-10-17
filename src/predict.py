@@ -43,6 +43,7 @@ def compute_drug_embedding(
 
     os.makedirs("tmp", exist_ok=True)
     os.chdir("MolecularTransformerEmbeddings")
+    vector_list = []
     for drug_id in drugs:
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -67,10 +68,19 @@ def compute_drug_embedding(
         # In this case we vectorize one by one, so only 1 row in the array
         embeddings = vectors[0].tolist()
         # TODO: add label also?
-        vectordb.add("drug", drug_id, vector=embeddings, sequence=drug_smiles, label=drug_label)
+        vector_list.append({
+            "vector": embeddings,
+            "payload": {
+                "id": drug_id,
+                "sequence":drug_smiles,
+                "label": drug_label
+            }
+        })
+        # vectordb.add("drug", drug_id, vector=embeddings, sequence=drug_smiles, label=drug_label)
         embeddings.insert(0, drug_id)
         df.loc[len(df)] = embeddings
     os.chdir("..")
+    vectordb.add("drug", vector_list)
     return df
 
 
@@ -88,6 +98,7 @@ def compute_target_embedding(
         df = pd.DataFrame.from_records(targets_list)
         return df
 
+    vector_list = []
     for target_id in targets:
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -121,9 +132,18 @@ def compute_target_embedding(
 
         target_embeddings = torch.stack(sequence_representations, dim=0).numpy()  # numpy.ndarray 3775 x 1280
         embeddings = target_embeddings[0].tolist()
-        vectordb.add("target", target_id, vector=embeddings, sequence=target_seq, label=target_label)
+        vector_list.append({
+            "vector": embeddings,
+            "payload": {
+                "id": target_id,
+                "sequence":target_seq,
+                "label": target_label
+            }
+        })
+        # vectordb.add("target", target_id, vector=embeddings, sequence=target_seq, label=target_label)
         embeddings.insert(0, target_id)
         df.loc[len(df)] = embeddings
+    vectordb.add("target", vector_list)
     return df
 
 

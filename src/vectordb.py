@@ -88,22 +88,25 @@ class QdrantDB(VectorDB):
                     )
 
     def add(
-        self, collection_name: str, entity_id: str, vector: list[float], sequence: str | None = None, label: str | None = None
+        self, collection_name: str, item_list: list[str]
     ) -> UpdateResult:
-        payload = {"id": entity_id}
-        if sequence:
-            payload["sequence"] = sequence
-        if label:
-            payload["label"] = label
+        # payload = {"id": entity_id}
+        # if sequence:
+        #     payload["sequence"] = sequence
+        # if label:
+        #     payload["label"] = label
+        points_count = self.client.get_collection(collection_name).points_count
+        points_list = [
+            PointStruct(id=points_count + i + 1, vector=item["vector"], payload=item["payload"]) for i, item in enumerate(item_list)
+        ]
         operation_info = self.client.upsert(
             collection_name=collection_name,
             wait=True,
-            points=[
-                PointStruct(
-                    id=self.client.get_collection(collection_name).points_count + 1, vector=vector, payload=payload
-                ),
-                # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
-            ],
+            points=points_list,
+            # [PointStruct(
+            #     id=self.client.get_collection(collection_name).points_count + 1, vector=vector, payload=payload
+            # )],
+            # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
         )
         return operation_info
 
@@ -138,7 +141,6 @@ class QdrantDB(VectorDB):
         return search_result[0]
 
 
-def init_vectordb(collections: list[dict[str, str]], recreate: bool = False):
+def init_vectordb(collections: list[dict[str, str]], recreate: bool = False, api_key: str = "TOCHANGE"):
     qdrant_url = "qdrant.137.120.31.148.nip.io"
-    qdrant_apikey = "TOCHANGE"
-    return QdrantDB(collections=collections, recreate=recreate, host=qdrant_url, port=443, api_key=qdrant_apikey)
+    return QdrantDB(collections=collections, recreate=recreate, host=qdrant_url, port=443, api_key=api_key)

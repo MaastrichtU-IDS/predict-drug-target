@@ -254,20 +254,30 @@ pubchem_ids = normalize_id_to_translator(drugs_list)
 
 failed_conversion = []
 # Add drug embeddings to the vector db
+vector_list = []
 for _index, row in embeddings["drug"].iterrows():
     log.info(f"Drug {_index}/{len(embeddings['drug'])}")
     vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
     # if pubchem_id not in pubchem_ids:
     #     failed_conversion.append(row['drug'])
     #     continue
-    pubchem_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
-    if not pubchem_id or not pubchem_id.lower().startswith("pubchem.compound:"):
-        failed_conversion.append(f"{row['drug']} > {pubchem_id}")
+    drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
+    if not drug_id or not drug_id.lower().startswith("pubchem.compound:"):
+        failed_conversion.append(f"{row['drug']} > {drug_id}")
         continue
 
     # pubchem = normalize_id_to_translator()
-    drug_smiles, drug_label = get_smiles_for_drug(pubchem_id)
-    vectordb.add("drug", pubchem_id, vector=vector, sequence=drug_smiles, label=drug_label)
+    drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+    vector_list.append({
+        "vector": vector,
+        "payload": {
+            "id": drug_id,
+            "sequence":drug_smiles,
+            "label": drug_label
+        }
+    })
+
+vectordb.add("drug", vector_list)
 
 print(f"{len(failed_conversion)} drugs ignored:")
 print("\n".join(failed_conversion))

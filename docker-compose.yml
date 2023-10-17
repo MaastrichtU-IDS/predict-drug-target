@@ -5,9 +5,10 @@ services:
     build: .
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./MolecularTransformerEmbeddings:/app/MolecularTransformerEmbeddings
+      - ./:/app
+      # - ./data:/app/data
+      # - ./models:/app/models
+      # - ./MolecularTransformerEmbeddings:/app/MolecularTransformerEmbeddings
     environment:
       - VIRTUAL_HOST=predict-drug-target.137.120.31.160.nip.io
       - LETSENCRYPT_HOST=predict-drug-target.137.120.31.160.nip.io
