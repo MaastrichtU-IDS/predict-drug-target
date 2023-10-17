@@ -25,7 +25,7 @@ services:
     shm_size: '4g'
     # ports:
     #   - 8000:8000
-    # command: uvicorn --host 0.0.0.0 src.api:app --reload
+    command: uvicorn --host 0.0.0.0 src.api:app --reload
     networks:
       - nginx
 
