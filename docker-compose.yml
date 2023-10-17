@@ -2,7 +2,6 @@ version: "3"
 services:
 
   predict-drug-target-api:
-    # https://hub.docker.com/r/qdrant/qdrant/tags
     build: .
     restart: unless-stopped
     volumes:
