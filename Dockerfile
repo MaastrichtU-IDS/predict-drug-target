@@ -23,4 +23,4 @@ RUN pip3 install -r requirements.txt
 ADD . .
 RUN pip3 install -e .
 
-CMD [ "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--host", "0.0.0.0", "src.api:app" ]
+CMD [ "gunicorn", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "src.api:app" ]
