@@ -22,7 +22,7 @@ from src.utils import (
 )
 from src.vectordb import VectorDB, init_vectordb
 
-# VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
+VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
 
 
 def load_model(path: str = "models/drug_target.pkl"):
@@ -129,8 +129,8 @@ def compute_target_embedding(
 
 
 @trapi_predict(
-    path="/predict",
-    name="Get predicted targets for a given drug",
+    path="/predict-drug-target",
+    name="Get predicted score for interactions between drugs and targets (protein)",
     description="Return the predicted targets for a given entity: drug (PubChem ID) or target (UniProtKB ID), with confidence scores.",
     edges=[
         {
@@ -140,18 +140,16 @@ def compute_target_embedding(
             "object": "biolink:Protein",
         },
     ],
-    nodes={"biolink:Disease": {"id_prefixes": ["OMIM"]}, "biolink:Drug": {"id_prefixes": ["DRUGBANK"]}},
+    nodes={"biolink:Protein": {"id_prefixes": ["UniProtKB", "ENSEMBL"]}, "biolink:Drug": {"id_prefixes": ["PUBCHEM.COMPOUND"]}},
 )
 def get_drug_target_predictions(request: PredictInput) -> PredictOutput:
-    vectordb = init_vectordb(COLLECTIONS, recreate=False)
     time_start = datetime.now()
     model = load_model()
 
     # Compute embeddings for drugs and target, based on their smiles and amino acid sequence
-    drug_embed = compute_drug_embedding(vectordb, request.subjects)
-    target_embed = compute_target_embedding(vectordb, request.objects)
-
-    # print("DRUGSS", drug_embed)
+    drug_embed = compute_drug_embedding(VECTORDB, request.subjects)
+    target_embed = compute_target_embedding(VECTORDB, request.objects)
+    # print("DRUGS TARGETS", drug_embed)
     # print(target_embed)
 
     # Merge embeddings, results should have 1792 columns (512 from drugs + 1280 from targets)

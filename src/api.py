@@ -18,9 +18,10 @@ trapi_example = {
                 },
                 "n1": {
                     "categories": ["biolink:Protein"],
-                    "ids": ["ENSEMBL:ENSP00000351276", "ENSEMBL:ENSP00000310301"],
-                },
-            },
+                    "ids": ["UniProtKB:P12345", "ENSEMBL:ENSP00000351276"],
+                    # "ENSEMBL:ENSP00000310301"
+                }
+            }
         }
     },
     "query_options": {"max_score": 1, "min_score": 0.1, "n_results": 10},

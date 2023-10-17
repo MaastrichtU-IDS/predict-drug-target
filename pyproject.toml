@@ -28,7 +28,7 @@ classifiers = [
 ]
 
 dependencies = [
-    # "trapi-predict-kit[web]",
+    # "trapi-predict-kit[web] >=0.2.0",
     "trapi-predict-kit[web] @ git+https://github.com/MaastrichtU-IDS/trapi-predict-kit.git",
     "fair-esm",
     "bio",
