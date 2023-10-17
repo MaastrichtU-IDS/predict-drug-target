@@ -13,11 +13,13 @@ trapi_example = {
         "query_graph": {
             "edges": {"e01": {"object": "n1", "predicates": ["biolink:interacts_with"], "subject": "n0"}},
             "nodes": {
-                "n0": {"categories": ["biolink:Drug"], "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]},
+                "n0": {
+                    "categories": ["biolink:Drug"],
+                    "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
+                },
                 "n1": {
                     "categories": ["biolink:Protein"],
                     "ids": ["UniProtKB:P12345", "ENSEMBL:ENSP00000351276"],
-                    # "ENSEMBL:ENSP00000310301"
                 },
             },
         }
@@ -37,13 +39,12 @@ openapi_info = {
         "name": "MIT license",
         "url": "https://opensource.org/licenses/MIT",
     },
-    "termsOfService": "https://github.com/your-org-or-username/my-model/blob/main/LICENSE.txt",
+    "termsOfService": "https://github.com/MaastrichtU-IDS/predict-drug-target/blob/main/LICENSE.txt",
     "x-translator": {
         "component": "KP",
-        # TODO: update the Translator team to yours
         "team": ["Clinical Data Provider"],
         "biolink-version": settings.BIOLINK_VERSION,
-        "infores": "infores:openpredict",
+        "infores": "infores:predict-drug-target",
         "externalDocs": {
             "description": "The values for component and team are restricted according to this external JSON schema. See schema and examples at url",
             "url": "https://github.com/NCATSTranslator/translator_extensions/blob/production/x-translator/",
