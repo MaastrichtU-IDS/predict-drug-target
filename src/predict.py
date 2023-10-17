@@ -6,6 +6,7 @@ import esm
 import numpy as np
 import pandas as pd
 import torch
+from molecular_transformer import get_smiles_embeddings
 from trapi_predict_kit import PredictInput, PredictOutput, trapi_predict
 
 from src.utils import (
@@ -44,6 +45,7 @@ def compute_drug_embedding(
     os.makedirs("tmp", exist_ok=True)
     os.chdir("MolecularTransformerEmbeddings")
     vector_list = []
+    # embed_dict = get_smiles_embeddings(smiles_list)
     for drug_id in drugs:
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -56,20 +58,22 @@ def compute_drug_embedding(
 
         drug_smiles, drug_label = get_smiles_for_drug(drug_id)
         log.info(f"⏳💊 Drug {drug_id} not found in VectorDB, computing its embeddings from SMILES {drug_smiles}")
-        with open("../tmp/drug_smiles.txt", "w") as f:
-            f.write(drug_smiles)
-        os.system("python embed.py --data_path=../tmp/drug_smiles.txt")
-        o = np.load("embeddings/drug_smiles.npz")
-        files = o.files  # 1 file
-        gen_embeddings = []
-        for file in files:
-            gen_embeddings.append(o[file])  # 'numpy.ndarray' n length x 512
-        vectors = np.stack([emb.mean(axis=0) for emb in gen_embeddings])
-        # In this case we vectorize one by one, so only 1 row in the array
-        embeddings = vectors[0].tolist()
+        embed_dict = get_smiles_embeddings([drug_smiles])
+
+        # with open("../tmp/drug_smiles.txt", "w") as f:
+        #     f.write(drug_smiles)
+        # os.system("python embed.py --data_path=../tmp/drug_smiles.txt")
+        # o = np.load("embeddings/drug_smiles.npz")
+        # files = o.files  # 1 file
+        # gen_embeddings = []
+        # for file in files:
+        #     gen_embeddings.append(o[file])  # 'numpy.ndarray' n length x 512
+        # vectors = np.stack([emb.mean(axis=0) for emb in gen_embeddings])
+        # # In this case we vectorize one by one, so only 1 row in the array
+        # embeddings = vectors[0].tolist()
         # TODO: add label also?
         vector_list.append({
-            "vector": embeddings,
+            "vector": embed_dict[drug_smiles],
             "payload": {
                 "id": drug_id,
                 "sequence":drug_smiles,
