@@ -14,5 +14,6 @@ cd MolecularTransformerEmbeddings
 chmod +x download.sh
 ./download.sh
 python embed.py --data_path=../data/download/drugbank_smiles.txt
+mkdir -p ../data/vectors
 mv embeddings/drugbank_smiles.npz ../data/vectors/
 cd ..
