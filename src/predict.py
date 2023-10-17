@@ -72,7 +72,7 @@ def compute_drug_embedding(
         # # In this case we vectorize one by one, so only 1 row in the array
         # embeddings = vectors[0].tolist()
         # TODO: add label also?
-        embeddings = embed_dict[drug_smiles]
+        embeddings = list(embed_dict[drug_smiles])
         vector_list.append({
             "vector": embeddings,
             "payload": {
