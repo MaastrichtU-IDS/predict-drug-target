@@ -57,6 +57,7 @@ test = [
     "mypy >=0.991",
     "ruff",
     "black",
+    "pip-tools",
     "reasoner_validator",
     "types-requests",
 ]
@@ -95,6 +96,7 @@ cov = [
     "python -c 'import webbrowser; webbrowser.open(\"http://0.0.0.0:3000\")'",
     "python -m http.server 3000 --directory ./htmlcov",
 ]
+compile = "pip-compile -o requirements.txt pyproject.toml"
 
 # TOOLS
 [tool.hatch.metadata]
