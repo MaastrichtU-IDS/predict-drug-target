@@ -2,3 +2,7 @@
 data/vectors
 MolecularTransformerEmbeddings
 src/__pycache__
+tmp/
+models/
+__pycache__/
+.pytest_cache
