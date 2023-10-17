@@ -10,7 +10,7 @@ WORKDIR /app
 
 # CUDA image required to install python
 RUN apt-get update && \
-    apt-get install -y vim python3-dev python3-venv curl wget unzip && \
+    apt-get install -y vim python3-dev python3-venv curl wget unzip git && \
     ln -s /usr/bin/python3 /usr/bin/python && \
     wget https://bootstrap.pypa.io/get-pip.py && \
     python3 get-pip.py && \
