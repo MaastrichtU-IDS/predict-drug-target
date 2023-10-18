@@ -34,6 +34,7 @@ def compute_drug_embedding(
     vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG
 ) -> pd.DataFrame:
     df = pd.DataFrame(columns=["drug", *list(range(length))])
+    # If no drug provided we get all drugs in vectordb
     if not drugs:
         # Get all drugs takes ~10s for 5k5 drugs
         drugs_list = vectordb.get("drug", None, limit=VECTORDB_MAX_LIMIT)
@@ -42,12 +43,10 @@ def compute_drug_embedding(
         df = pd.DataFrame.from_records(drugs_list)
         return df
 
-    os.makedirs("tmp", exist_ok=True)
-    os.chdir("MolecularTransformerEmbeddings")
-    vector_list = []
-    # embed_dict = get_smiles_embeddings(smiles_list)
-    drugs_without_embed = {}
-    drugs_labels = {}
+    # Otherwise check if drug embedding already in vectordb
+    upload_list = []
+    drugs_no_embed = {}
+    labels_dict = {}
     for drug_id in drugs:
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -56,32 +55,34 @@ def compute_drug_embedding(
             embeddings.insert(0, drug_id)
             # df = pd.concat([df, pd.DataFrame(embeddings)], ignore_index = True)
             df.loc[len(df)] = embeddings
-            continue
         else:
+            # If not in vectordb we get its smile and add it to the list to compute
             drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-            drugs_without_embed[drug_smiles] = drug_id
-            drugs_labels[drug_id] = drug_label
+            drugs_no_embed[drug_smiles] = drug_id
+            labels_dict[drug_id] = drug_label
 
-        drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-        embed_dict = get_smiles_embeddings([drug_id])
-        # log.info(f"⏳💊 Drug {drugs_without_embed.keys()} not found in VectorDB, computing its embeddings from SMILES {drug_smiles}")
-        # embed_dict = get_smiles_embeddings(list(drugs_without_embed.keys()))
+    if not drugs_no_embed: # No embeddings to generate
+        return df
 
-        # TODO: add label also?
-        embeddings: np.array = embed_dict[drug_smiles].tolist()
-        vector_list.append({
+    # Then we compute embeddings for all drugs not in vectordb
+    log.info(f"⏳💊 Drug {', '.join(drugs_no_embed.values())} not found in VectorDB, computing their embeddings from SMILES")
+    embed_dict = get_smiles_embeddings(list(drugs_no_embed.keys()))
+
+    # Finally we add the newly computed embeddings to the vectordb
+    for smiles, embeddings in embed_dict.items():
+        log.info(len(embeddings))
+        drug_id = drugs_no_embed[smiles]
+        upload_list.append({
             "vector": embeddings,
             "payload": {
                 "id": drug_id,
-                "sequence":drug_smiles,
-                "label": drug_label
+                "sequence": smiles,
+                "label": labels_dict[drug_id]
             }
         })
-        # vectordb.add("drug", drug_id, vector=embeddings, sequence=drug_smiles, label=drug_label)
-        embeddings.insert(0, drug_id)
-        df.loc[len(df)] = embeddings
-    os.chdir("..")
-    vectordb.add("drug", vector_list)
+        df.loc[len(df)] = [drug_id] + embeddings
+
+    vectordb.add("drug", upload_list)
     return df
 
 
@@ -89,8 +90,8 @@ def compute_target_embedding(
     vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET
 ) -> pd.DataFrame:
     df = pd.DataFrame(columns=["target", *list(range(length))])
+    # If not target provided we get all targets in vectordb
     if not targets:
-        # Get all targets
         targets_list = vectordb.get("target", None, limit=VECTORDB_MAX_LIMIT)
         log.info(f"Retrieved {len(targets_list)} targets")
         targets_list = [
@@ -99,7 +100,10 @@ def compute_target_embedding(
         df = pd.DataFrame.from_records(targets_list)
         return df
 
-    vector_list = []
+    # Otherwise check if target embedding already in vectordb
+    upload_list = []
+    targets_no_embed = {}
+    labels_dict = {}
     for target_id in targets:
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -108,43 +112,48 @@ def compute_target_embedding(
             embeddings = from_vectordb[0].vector
             embeddings.insert(0, target_id)
             df.loc[len(df)] = embeddings
-            continue
+        else:
+            # If not in vectordb we get its smile and add it to the list to compute
+            target_seq, target_label = get_seq_for_target(target_id)
+            targets_no_embed[target_seq] = target_id
+            labels_dict[target_id] = target_label
 
-        log.info(f"⏳🎯 Target {target_id} not found in VectorDB, computing its embeddings")
-        # TODO: perform bulk compute when multiple embeddings are not cached
-        target_seq, target_label = get_seq_for_target(target_id)
-        # Load ESM-2 model
-        model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-        batch_converter = alphabet.get_batch_converter()
-        model.eval()  # disables dropout for deterministic results
-        data = [
-            (target_id, target_seq),
-            # ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"),
-        ]
-        batch_labels, batch_strs, batch_tokens = batch_converter(data)
-        batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
-        # Extract per-residue representations (on CPU)
-        with torch.no_grad():
-            results = model(batch_tokens, repr_layers=[33], return_contacts=True)
-        token_representations = results["representations"][33]
-        sequence_representations = []
-        for i, tokens_len in enumerate(batch_lens):
-            sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
+    if not targets_no_embed: # No embeddings to generate
+        return df
 
-        target_embeddings = torch.stack(sequence_representations, dim=0).numpy()  # numpy.ndarray 3775 x 1280
-        embeddings = target_embeddings[0].tolist()
-        vector_list.append({
+    # Compute the missing targets embeddings
+    log.info(f"⏳🎯 Targets {', '.join(targets_no_embed.values())} not found in VectorDB, computing their embeddings")
+    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    batch_converter = alphabet.get_batch_converter()
+    model.eval()  # disables dropout for deterministic results
+    data = [(target_id, target_seq) for target_seq, target_id in targets_no_embed.items()]
+    # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
+    batch_labels, batch_strs, batch_tokens = batch_converter(data)
+    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
+    # Extract per-residue representations (on CPU)
+    with torch.no_grad():
+        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
+    token_representations = results["representations"][33]
+    sequence_representations = []
+    for i, tokens_len in enumerate(batch_lens):
+        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
+
+    target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
+    out_dict = {seq: matrix for seq, matrix in zip(targets_no_embed.keys(), target_embeddings)}
+
+    # Add the computed embeddings to the vectordb
+    for target_seq, embeddings in out_dict.items():
+        target_id = targets_no_embed[target_seq]
+        upload_list.append({
             "vector": embeddings,
             "payload": {
                 "id": target_id,
-                "sequence":target_seq,
-                "label": target_label
+                "sequence": target_seq,
+                "label": labels_dict[target_id]
             }
         })
-        # vectordb.add("target", target_id, vector=embeddings, sequence=target_seq, label=target_label)
-        embeddings.insert(0, target_id)
-        df.loc[len(df)] = embeddings
-    vectordb.add("target", vector_list)
+        df.loc[len(df)] = [target_id] + embeddings
+    vectordb.add("target", upload_list)
     return df
 
 

@@ -90,23 +90,15 @@ class QdrantDB(VectorDB):
     def add(
         self, collection_name: str, item_list: list[str]
     ) -> UpdateResult:
-        # payload = {"id": entity_id}
-        # if sequence:
-        #     payload["sequence"] = sequence
-        # if label:
-        #     payload["label"] = label
         points_count = self.client.get_collection(collection_name).points_count
         points_list = [
             PointStruct(id=points_count + i + 1, vector=item["vector"], payload=item["payload"]) for i, item in enumerate(item_list)
         ]
+        # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
         operation_info = self.client.upsert(
             collection_name=collection_name,
             wait=True,
             points=points_list,
-            # [PointStruct(
-            #     id=self.client.get_collection(collection_name).points_count + 1, vector=vector, payload=payload
-            # )],
-            # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
         )
         return operation_info
 
