@@ -1,0 +1,1 @@
+wget --recursive --no-parent --no-host-directories -P ./data/download/opentargets/ --cut-dirs 8 ftp://ftp.ebi.ac.uk/pub/databases/opentargets/platform/23.09/output/etl/json/knownDrugsAggregated
