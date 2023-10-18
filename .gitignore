@@ -1,4 +1,9 @@
 .venv
 data/vectors
+data/smiles_transformer/
 MolecularTransformerEmbeddings
 src/__pycache__
+tmp/
+models/
+__pycache__/
+.pytest_cache
