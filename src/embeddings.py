@@ -106,7 +106,7 @@ def compute_target_embedding(
     targets_no_embed = {}
     list_targets_no_seq = []
     labels_dict = {}
-    for target_id in targets:
+    for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
         if len(from_vectordb) > 0:

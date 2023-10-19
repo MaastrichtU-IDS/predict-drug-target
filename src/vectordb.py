@@ -62,10 +62,7 @@ class QdrantDB(VectorDB):
         else:
             try:
                 log.info(
-                    f"💊 {self.client.get_collection('drug').points_count} vectors in the {BOLD}drug{END} collection"
-                )
-                log.info(
-                    f"🎯 {self.client.get_collection('target').points_count} vectors in the {BOLD}target{END} collection"
+                    f"Vector DB initialized: 💊 {self.client.get_collection('drug').points_count} drugs | 🎯 {self.client.get_collection('target').points_count} targets"
                 )
             except Exception as e:
                 log.info(f"⚠️ Collection not found: {e}, recreating the collections")

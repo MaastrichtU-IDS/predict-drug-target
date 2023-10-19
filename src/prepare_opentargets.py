@@ -92,6 +92,7 @@ def main(target_directory, output_directory):
     # first extract the drug-target pairs from the opentargets json files
     json_files = get_jsonl_files(target_directory)
     for json_file in tqdm(json_files, desc="Processing files"):
+        # log.info(json_file)
         for drugId, targetId in extract_data_from_jsonl(json_file):
             known_drug_targets.append(
                 {

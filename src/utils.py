@@ -1,7 +1,7 @@
 import logging
 
 import requests
-from pubchempy import Compound
+import pubchempy as pcp
 
 VECTORDB_MAX_LIMIT = 100000
 
@@ -14,13 +14,18 @@ COLLECTIONS = [
 
 
 ## Instantiate logging utility
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 log.propagate = False
 log.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s %(levelname)s: [%(module)s:%(funcName)s] %(message)s")
 console_handler.setFormatter(formatter)
 log.addHandler(console_handler)
+
+# Silence qdrant log.infos
+default_logger = logging.getLogger()
+default_logger.setLevel(logging.WARNING)
+
 
 BOLD = "\033[1m"
 END = "\033[0m"
@@ -32,18 +37,20 @@ TIMEOUT = 30
 
 
 def get_smiles_for_drug(drug_id: str):
+    comp: pcp.Compound|None = None
     # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL1201754?format=json
     if drug_id.lower().startswith("chembl.compound:"):
         drug_id = drug_id[len("chembl.compound:") :]
-        res = requests.get(
-            f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
-        ).json()
+        # res = requests.get(
+        #     f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
+        # ).json()
         # log.info(res)
-        return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
+        comp = pcp.get_compounds(drug_id, namespace='chembl')
+        # return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
     if drug_id.lower().startswith("pubchem.compound:"):
         drug_id = drug_id[len("pubchem.compound:") :]
-        comp = Compound.from_cid(drug_id)
-        return comp.canonical_smiles, comp.iupac_name
+        comp = pcp.Compound.from_cid(drug_id)
+    return comp.canonical_smiles, comp.iupac_name
 
 
 def get_seq_for_target(target_id: str):
