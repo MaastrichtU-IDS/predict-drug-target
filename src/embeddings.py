@@ -57,7 +57,7 @@ def compute_drug_embedding(
                 list_drugs_no_smiles.append(drug_id)
 
     if list_drugs_no_smiles:
-        log.info(f"We could not find SMILES for {len(list_drugs_no_smiles)}")
+        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)}")
         log.info(list_drugs_no_smiles)
     if not drugs_no_embed:  # No embeddings to generate
         return df
@@ -96,6 +96,7 @@ def compute_target_embedding(
     # Otherwise check if target embedding already in vectordb
     upload_list = []
     targets_no_embed = {}
+    list_targets_no_seq = []
     labels_dict = {}
     for target_id in targets:
         # Check if we can find it in the vectordb
@@ -107,15 +108,21 @@ def compute_target_embedding(
             df.loc[len(df)] = embeddings
         else:
             # If not in vectordb we get its smile and add it to the list to compute
-            target_seq, target_label = get_seq_for_target(target_id)
-            targets_no_embed[target_seq] = target_id
-            labels_dict[target_id] = target_label
+            try:
+                target_seq, target_label = get_seq_for_target(target_id)
+                targets_no_embed[target_seq] = target_id
+                labels_dict[target_id] = target_label    
+            except:
+                list_targets_no_seq.append(target_id)
 
+    if list_targets_no_seq:
+        log.info(f"⚠️ We could not find SMILES for {len(list_targets_no_seq)}")
+        log.info(list_targets_no_seq)
     if not targets_no_embed:  # No embeddings to generate
         return df
 
     # Compute the missing targets embeddings
-    log.info(f"⏳🎯 Targets {', '.join(targets_no_embed.values())} not found in VectorDB, computing their embeddings")
+    log.info(f"⏳🎯 {len(targets_no_embed)} targets not found in VectorDB, computing their embeddings")
     model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     batch_converter = alphabet.get_batch_converter()
     model.eval()  # disables dropout for deterministic results

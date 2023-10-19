@@ -253,30 +253,26 @@ def train():
     pubchem_ids = normalize_id_to_translator(drugs_list)
     # 416 drugs dont have a Pubchem ID as pref ID, we ignore them for now
 
-    failed_conversion = []
-    # Add drug embeddings to the vector db
-    vector_list = []
-    for _index, row in embeddings["drug"].iterrows():
-        log.info(f"Drug {_index}/{len(embeddings['drug'])}")
-        vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
-        # if pubchem_id not in pubchem_ids:
-        #     failed_conversion.append(row['drug'])
-        #     continue
-        drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
+#     # Add drug embeddings to the vector db
+#     failed_conversion = []
+#     vector_list = []
+#     for _index, row in embeddings["drug"].iterrows():
+#         log.info(f"Drug {_index}/{len(embeddings['drug'])}")
+#         vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
+#         # if pubchem_id not in pubchem_ids:
+#         #     failed_conversion.append(row['drug'])
+#         #     continue
+#         drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
 
-        # pubchem = normalize_id_to_translator()
-        try:
-            drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-            vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
-        except: 
-            failed_conversion.append(drug_id)
+#         # pubchem = normalize_id_to_translator()
+#         try:
+#             drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+#             vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
+#         except: 
+#             failed_conversion.append(drug_id)
     
-    log.info(f"⚠️ Failed to get SMILES for {len(failed_conversion)} drugs：{failed_conversion}")
-    vectordb.add("drug", vector_list)
-    
-
-    print(f"{len(failed_conversion)} drugs ignored:")
-    print("\n".join(failed_conversion))
+#     log.info(f"⚠️ Failed to get SMILES for {len(failed_conversion)} drugs：{failed_conversion}")
+#     vectordb.add("drug", vector_list)
 
     pairs, labels = generateDTPairs(dt_df)
     ndrugs = len(embeddings["drug"])
@@ -312,8 +308,8 @@ def train():
     with open("models/drug_target.pkl", "wb") as f:
         pickle.dump(rf_model, f)
 
-    with open("models/embeddings.pkl", "wb") as f:
-        pickle.dump(embeddings, f)
+    # with open("models/embeddings.pkl", "wb") as f:
+    #     pickle.dump(embeddings, f)
 
     return agg_df.to_dict(orient="records")
 

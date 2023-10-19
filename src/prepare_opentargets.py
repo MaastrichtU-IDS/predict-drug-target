@@ -100,11 +100,18 @@ def main(target_directory, output_directory):
 
     df_known_dt = pd.DataFrame(known_drug_targets)
     df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()))
+    log.info("DRUGS EMBEDDINGS COMPUTED")
+             
+    df_targets = compute_target_embedding(vectordb, set(df_known["target"].tolist()))
+    log.info("TARGETS EMBEDDINGS COMPUTED")
 
-    print(df_drugs)
-
-    # df_targets = compute_target_embedding(vectordb, set(df_known["targets"]))
-
+    os.makedirs("data/opentargets", exist_ok=True)
+    df_drugs.to_csv('data/opentargets/drugs_embeddings.csv', index=False)
+    df_targets.to_csv('data/opentargets/targets_embeddings.csv', index=False)
+    df_known_dt.to_csv('data/opentargets/known_drug_targets.csv', index=False)
+    
+    
+    
     # write_to_csv(f'{output_directory}/opentargets_drug_targets.csv',
     #                 drug_targets, ['DrugId', 'TargetId'])
 
