@@ -22,6 +22,10 @@ VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
 def compute_drug_embedding(
     vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG
 ) -> pd.DataFrame:
+    """Compute embeddings for a list of drug ID based on its retrieved SMILES.
+    Returns a pandas dataframe with a "drug" column containing the drug ID,
+    and all other columns contains the embeddings
+    """
     df = pd.DataFrame(columns=["drug", *list(range(length))])
     # If no drug provided we get all drugs in vectordb
     if not drugs:
@@ -82,6 +86,10 @@ def compute_drug_embedding(
 def compute_target_embedding(
     vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET
 ) -> pd.DataFrame:
+    """Compute embeddings for a list of target ID based on its retrieved amino acid sequence.
+    Returns a pandas dataframe with a "target" column containing the target ID,
+    and all other columns contains the embeddings
+    """
     df = pd.DataFrame(columns=["target", *list(range(length))])
     # If not target provided we get all targets in vectordb
     if not targets:
@@ -111,7 +119,7 @@ def compute_target_embedding(
             try:
                 target_seq, target_label = get_seq_for_target(target_id)
                 targets_no_embed[target_seq] = target_id
-                labels_dict[target_id] = target_label    
+                labels_dict[target_id] = target_label
             except:
                 list_targets_no_seq.append(target_id)
 
