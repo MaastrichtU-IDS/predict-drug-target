@@ -263,15 +263,17 @@ def train():
         #     failed_conversion.append(row['drug'])
         #     continue
         drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
-        if not drug_id or not drug_id.lower().startswith("pubchem.compound:"):
-            failed_conversion.append(f"{row['drug']} > {drug_id}")
-            continue
 
         # pubchem = normalize_id_to_translator()
-        drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-        vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
-
+        try:
+            drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+            vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
+        except: 
+            failed_conversion.append(drug_id)
+    
+    log.info(f"⚠️ Failed to get SMILES for {len(failed_conversion)} drugs：{failed_conversion}")
     vectordb.add("drug", vector_list)
+    
 
     print(f"{len(failed_conversion)} drugs ignored:")
     print("\n".join(failed_conversion))
@@ -287,7 +289,8 @@ def train():
 
     # nb_model = GaussianNB()
     # lr_model = linear_model.LogisticRegression()
-    rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
+    # rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
+    rf_model = ensemble.RandomForestClassifier(n_estimators=200, criterion='log_loss', max_depth=None, min_samples_split=2, min_samples_leaf=1, max_features='sqrt', n_jobs=-1)
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
     clfs = [("Random Forest", rf_model)]
