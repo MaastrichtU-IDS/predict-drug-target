@@ -11,6 +11,9 @@ from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
+# NOTE: Download opentargets before running this script
+# ./scripts/download_opentargets.sh
+
 # A list of KNOWN drugs-interacts_with-targets (from opentarget)
 # Once we have this list, we just need to pass it to the compute_drug_embedding or compute_target_embedding functions
 # These functions returns a dataframe with a "drug" column for the ID, and all other columns are the embeddings

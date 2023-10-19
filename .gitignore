@@ -5,6 +5,7 @@ data/processed/
 models/
 
 MolecularTransformerEmbeddings/
+nohup.out
 tmp/
 .venv
 __pycache__/
