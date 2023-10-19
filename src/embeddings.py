@@ -124,7 +124,7 @@ def compute_target_embedding(
                 list_targets_no_seq.append(target_id)
 
     if list_targets_no_seq:
-        log.info(f"⚠️ We could not find SMILES for {len(list_targets_no_seq)}")
+        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)}")
         log.info(list_targets_no_seq)
     if not targets_no_embed:  # No embeddings to generate
         return df
