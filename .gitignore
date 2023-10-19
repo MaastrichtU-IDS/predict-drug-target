@@ -1,9 +1,11 @@
-.venv
 data/vectors
 data/smiles_transformer/
-MolecularTransformerEmbeddings
-src/__pycache__
-tmp/
+data/download/opentargets/
+data/processed/
 models/
+
+MolecularTransformerEmbeddings/
+tmp/
+.venv
 __pycache__/
 .pytest_cache

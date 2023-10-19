@@ -32,12 +32,13 @@ TIMEOUT = 30
 
 
 def get_smiles_for_drug(drug_id: str):
-    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL535?format=json
+    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL1201754?format=json
     if drug_id.lower().startswith("chembl.compound:"):
         drug_id = drug_id[len("chembl.compound:") :]
         res = requests.get(
             f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
         ).json()
+        # log.info(res)
         return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
     if drug_id.lower().startswith("pubchem.compound:"):
         drug_id = drug_id[len("pubchem.compound:") :]

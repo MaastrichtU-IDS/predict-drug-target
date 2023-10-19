@@ -229,6 +229,7 @@ def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pro
 
 ######
 
+
 def train():
     embeddings = {}
     protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
@@ -245,7 +246,6 @@ def train():
     today = date.today()
     results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
     agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
-
 
     ## Store all drugs vectors in the vector db
 
@@ -269,20 +269,12 @@ def train():
 
         # pubchem = normalize_id_to_translator()
         drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-        vector_list.append({
-            "vector": vector,
-            "payload": {
-                "id": drug_id,
-                "sequence":drug_smiles,
-                "label": drug_label
-            }
-        })
+        vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
 
     vectordb.add("drug", vector_list)
 
     print(f"{len(failed_conversion)} drugs ignored:")
     print("\n".join(failed_conversion))
-
 
     pairs, labels = generateDTPairs(dt_df)
     ndrugs = len(embeddings["drug"])

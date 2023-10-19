@@ -1,12 +1,11 @@
-import imp
 import logging
 
 from trapi_predict_kit import TRAPI, settings
 
 from src.predict import get_drug_target_predictions
+from src.train import train
 from src.utils import COLLECTIONS
 from src.vectordb import init_vectordb
-from src.train import train
 
 log_level = logging.INFO
 logging.basicConfig(level=log_level)
@@ -17,10 +16,7 @@ trapi_example = {
         "query_graph": {
             "edges": {"e01": {"object": "n1", "predicates": ["biolink:interacts_with"], "subject": "n0"}},
             "nodes": {
-                "n0": {
-                    "categories": ["biolink:Drug"],
-                    "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]
-                },
+                "n0": {"categories": ["biolink:Drug"], "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]},
                 "n1": {
                     "categories": ["biolink:Protein"],
                     "ids": ["UniProtKB:P12345", "ENSEMBL:ENSP00000351276"],
@@ -81,20 +77,14 @@ app = TRAPI(
     # trapi_description=""
 )
 
-@app.post(
-    "/reset-vectordb",
-    name="Reset vector database",
-    description="Reset the collections in the vectordb"
-)
+
+@app.post("/reset-vectordb", name="Reset vector database", description="Reset the collections in the vectordb")
 def post_reset_vectordb(api_key: str):
     init_vectordb(COLLECTIONS, recreate=True, api_key=api_key)
     return {"status": "ok"}
 
-@app.post(
-    "/train",
-    name="Run training",
-    description="Run training of the model"
-)
+
+@app.post("/train", name="Run training", description="Run training of the model")
 def post_train(api_key: str):
     # init_vectordb(COLLECTIONS, recreate=True, api_key=api_key)
     scores = train()
