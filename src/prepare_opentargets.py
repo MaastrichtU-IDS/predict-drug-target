@@ -1,14 +1,6 @@
 import csv
 import glob
 import json
-
-# A list of KNOWN drugs-interacts_with-targets (from opentarget)
-# Once we have this list, we just need to pass it to the compute_drug_embedding or compute_target_embedding functions
-# These functions returns a dataframe with a "drug" column for the ID, and all other columns are the embeddings
-# knownInteraction [ drug_id - target_id - 0 or 1 if interacts or not] (or could even be the mechanism of action string)
-# target_df[id - embeddings]
-# drugs_df[id - embeddings]
-# TODO: First we get the df of knownInteraction, then generate list of drugs, pass it to function to calculate embed, same for targets
 import os
 
 import pandas as pd
@@ -18,6 +10,15 @@ from tqdm import tqdm
 from src.embeddings import compute_drug_embedding
 from src.utils import COLLECTIONS
 from src.vectordb import init_vectordb
+
+# A list of KNOWN drugs-interacts_with-targets (from opentarget)
+# Once we have this list, we just need to pass it to the compute_drug_embedding or compute_target_embedding functions
+# These functions returns a dataframe with a "drug" column for the ID, and all other columns are the embeddings
+# knownInteraction [ drug_id - target_id - 0 or 1 if interacts or not] (or could even be the mechanism of action string)
+# target_df[id - embeddings]
+# drugs_df[id - embeddings]
+# TODO: First we get the df of knownInteraction, then generate list of drugs, pass it to function to calculate embed, same for targets
+
 
 # Output file path
 output_file_path = "../data/opentargets/merged_parsed.csv"
