@@ -61,9 +61,8 @@ class QdrantDB(VectorDB):
                 self.client.create_payload_index(collection["name"], "id", "keyword")
         else:
             try:
-                log.info(
-                    f"Vector DB initialized: 💊 {self.client.get_collection('drug').points_count} drugs | 🎯 {self.client.get_collection('target').points_count} targets"
-                )
+                collec_list = [f"{self.client.get_collection(collec['name']).points_count} {collec['name']}" for collec in collections]
+                log.info(f"Vector DB initialized: {' | '.join(collec_list)}")
             except Exception as e:
                 log.info(f"⚠️ Collection not found: {e}, recreating the collections")
                 for collection in collections:

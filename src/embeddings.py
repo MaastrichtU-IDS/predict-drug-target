@@ -43,7 +43,7 @@ def compute_drug_embedding(
     list_drugs_no_smiles = []
     drugs_no_embed = {}
     labels_dict = {}
-    for drug_id in tqdm(drugs, desc="Check drugs in vector db, or get SMILES"):
+    for drug_id in tqdm(drugs, desc="Check drugs in Vector DB, or get SMILES"):
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
             log.info(f"♻️ Drug {from_vectordb[0].payload['id']} retrieved from VectorDB")
@@ -57,12 +57,13 @@ def compute_drug_embedding(
                 drug_smiles, drug_label = get_smiles_for_drug(drug_id)
                 drugs_no_embed[drug_smiles] = drug_id
                 labels_dict[drug_id] = drug_label
-            except:
+            except Exception as e:
                 list_drugs_no_smiles.append(drug_id)
+                print(e)
 
     if list_drugs_no_smiles:
-        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)}")
-        log.info(list_drugs_no_smiles)
+        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)} drugs")
+        log.info(list_drugs_no_smiles[:10])
     if not drugs_no_embed:  # No embeddings to generate
         return df
 
@@ -79,6 +80,7 @@ def compute_drug_embedding(
         )
         df.loc[len(df)] = [drug_id] + embeddings
 
+    log.info(f"Loading {len(upload_list)} vectorrs")
     vectordb.add("drug", upload_list)
     return df
 
@@ -124,8 +126,8 @@ def compute_target_embedding(
                 list_targets_no_seq.append(target_id)
 
     if list_targets_no_seq:
-        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)}")
-        log.info(list_targets_no_seq)
+        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)} targets")
+        log.info(list_targets_no_seq[:10])
     if not targets_no_embed:  # No embeddings to generate
         return df
 

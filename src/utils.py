@@ -37,20 +37,19 @@ TIMEOUT = 30
 
 
 def get_smiles_for_drug(drug_id: str):
-    comp: pcp.Compound|None = None
-    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL1201754?format=json
+    # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL4297578?format=json
+    # CHEMBL.COMPOUND:CHEMBL4297578
     if drug_id.lower().startswith("chembl.compound:"):
         drug_id = drug_id[len("chembl.compound:") :]
-        # res = requests.get(
-        #     f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
-        # ).json()
-        # log.info(res)
-        comp = pcp.get_compounds(drug_id, namespace='chembl')
-        # return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
+        res = requests.get(
+            f"https://www.ebi.ac.uk/chembl/api/data/molecule/{drug_id}?format=json", timeout=TIMEOUT
+        ).json()
+        # log.info(f'{drug_id} | {res["molecule_structures"]["canonical_smiles"]} | {res["pref_name"]}')
+        return res["molecule_structures"]["canonical_smiles"], res["pref_name"]
     if drug_id.lower().startswith("pubchem.compound:"):
         drug_id = drug_id[len("pubchem.compound:") :]
         comp = pcp.Compound.from_cid(drug_id)
-    return comp.canonical_smiles, comp.iupac_name
+        return comp.canonical_smiles, comp.iupac_name
 
 
 def get_seq_for_target(target_id: str):
