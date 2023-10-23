@@ -18,8 +18,6 @@ from src.utils import (
 )
 from src.vectordb import VectorDB, init_vectordb
 
-
-accept_namespaces = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
 VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
 
 def get_sequences_embeddings(sequences: list[str]):
@@ -67,7 +65,7 @@ def compute_drug_embedding(
     list_drugs_no_smiles = []
     drugs_no_embed = {}
     labels_dict = {}
-    pref_ids = get_pref_ids(drugs, accept_namespaces)
+    pref_ids = get_pref_ids(drugs)
     for drug_id in tqdm(drugs, desc="Check drugs in Vector DB, or get SMILES"):
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -147,7 +145,7 @@ def compute_target_embedding(
     targets_no_embed = {}
     list_targets_no_seq = []
     labels_dict = {}
-    pref_ids = get_pref_ids(targets, accept_namespaces)
+    pref_ids = get_pref_ids(targets)
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)

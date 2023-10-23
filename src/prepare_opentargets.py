@@ -86,8 +86,7 @@ def prepare(target_directory, output_directory):
 
     df_known_dt = pd.DataFrame(known_drug_targets)
 
-    accept_namespaces = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
-    pref_ids = get_pref_ids(set(df_known_dt["drug"].tolist()).union(set(df_known_dt["target"].tolist())), accept_namespaces)
+    pref_ids = get_pref_ids(set(df_known_dt["drug"].tolist()).union(set(df_known_dt["target"].tolist())))
     # print(pref_ids)
 
     os.makedirs("data/opentargets", exist_ok=True)
@@ -178,6 +177,8 @@ def prepare(target_directory, output_directory):
         log.info(f"⚠️ We could not find AA sequence for {len(list_targets_no_seq)} targets")
     # Save unfound protein AA sequences to a CSV file
     save_list_to_csv(list_targets_no_seq, "data/opentargets/unfound_protein_sequences.csv", "protein_id", "reason")
+
+
 
 
     # These functions retrieves SMILES and compute embeddings in 1 batch

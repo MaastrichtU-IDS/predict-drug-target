@@ -11,6 +11,7 @@ COLLECTIONS = [
     {"name": "drug", "size": EMBEDDINGS_SIZE_DRUG},
     {"name": "target", "size": EMBEDDINGS_SIZE_TARGET},
 ]  # Total 1792 features cols
+ACCEPTED_NAMESPACES = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
 
 
 ## Instantiate logging utility
@@ -101,7 +102,7 @@ def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
     for an ID https://nodenormalization-sri.renci.org/docs
     """
     if not accepted_namespaces:
-        accepted_namespaces = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
+        accepted_namespaces = ACCEPTED_NAMESPACES
     # print(len(ids_list))
     converted_ids_obj = {}
     resolve_curies = requests.post(
