@@ -6,13 +6,20 @@ import os
 import pandas as pd
 import requests
 from tqdm import tqdm
+import logging
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.utils import COLLECTIONS, log, get_smiles_for_drug, get_seq_for_target
+from src.utils import COLLECTIONS, log, get_smiles_for_drug, get_seq_for_target, get_pref_ids
 from src.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
 # ./scripts/download_opentargets.sh
+
+# We need to generate 3 dataframe/CSV to provide to training as input:
+# 1. a known drug-target interactions df (2 cols)
+# 2. a df with drug embeddings: drug col + 512 cols for embeddings
+# 2. a df with target embeddings: target col + 1280 cols for embeddings
+
 
 # A list of KNOWN drugs-interacts_with-targets (from opentarget)
 # Once we have this list, we just need to pass it to the compute_drug_embedding or compute_target_embedding functions
@@ -39,6 +46,11 @@ def extract_data_from_jsonl(filename):
             data = json.loads(line.strip())
             yield data.get("drugId", None), data.get("targetId", None)
 
+def save_list_to_csv(data_list, filename, id_column, data_column):
+    if data_list:
+        df = pd.DataFrame(data_list)
+        df.to_csv(filename, index=False)
+        print(f"Saved {len(data_list)} items to {filename}")
 
 def write_to_csv(output_csv, data, header=None):
     """Write the provided data to a CSV file."""
@@ -74,31 +86,38 @@ def prepare(target_directory, output_directory):
 
     df_known_dt = pd.DataFrame(known_drug_targets)
 
+    accept_namespaces = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
+    pref_ids = get_pref_ids(set(df_known_dt["drug"].tolist()).union(set(df_known_dt["target"].tolist())), accept_namespaces)
+    # print(pref_ids)
+
     # Get SMILES for drugs
-    list_targets_no_seq = []
-    targets_seq_list = []
-    for target_id in tqdm(set(df_known_dt["drug"].tolist()), desc="Get drugs SMILES"):
+    list_drugs_no_smiles = []
+    drugs_smiles_list = []
+    # for drug_id in tqdm(set(df_known_dt["drug"].tolist()), desc="Get drugs SMILES"):
+    for drug_id in tqdm(set(df_known_dt["drug"].tolist()), desc="Get drugs SMILES"):
         try:
-            target_seq, target_label = get_smiles_for_drug(target_id)
-            targets_seq_list.append({
-                "drug": target_id,
-                "smiles": target_seq,
-                "label": target_label,
+            drug_smiles, drug_label = get_smiles_for_drug(pref_ids[drug_id])
+            drugs_smiles_list.append({
+                "drug": drug_id,
+                "smiles": drug_smiles,
+                "label": drug_label,
             })
         except Exception as e:
-            list_targets_no_seq.append(target_id)
-            # log.info(f"No SMILES for {target_id}")
-    if list_targets_no_seq:
-        log.info(list_targets_no_seq)
-        log.info(f"⚠️ We could not find SMILES for {len(list_targets_no_seq)} drugs")
-    df_drugs_smiles = pd.DataFrame(targets_seq_list)
+            list_drugs_no_smiles.append(drug_id)
+
+    if list_drugs_no_smiles:
+        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)} drugs")
+    df_drugs_smiles = pd.DataFrame(drugs_smiles_list)
+    # Save unfound drug SMILES to a CSV file
+    save_list_to_csv(list_drugs_no_smiles, "unfound_drug_smiles.csv", "drug_id", "reason")
+
 
     # Get AA seq for targets
     list_targets_no_seq = []
     targets_seq_list = []
     for target_id in tqdm(set(df_known_dt["target"].tolist()), desc="Get targets AA sequences"):
         try:
-            target_seq, target_label = get_seq_for_target(target_id)
+            target_seq, target_label = get_seq_for_target(pref_ids[target_id])
             targets_seq_list.append({
                 "target": target_id,
                 "sequence": target_seq,
@@ -106,11 +125,12 @@ def prepare(target_directory, output_directory):
             })
         except Exception as e:
             list_targets_no_seq.append(target_id)
-            # log.info(f"No AA seq for {target_id}")
-    if list_targets_no_seq:
-        log.info(list_targets_no_seq)
-        log.info(f"⚠️ We could not find AA sequence for {len(list_targets_no_seq)} targets")
+
     df_targets_seq = pd.DataFrame(targets_seq_list)
+    if list_targets_no_seq:
+        log.info(f"⚠️ We could not find AA sequence for {len(list_targets_no_seq)} targets")
+    # Save unfound protein AA sequences to a CSV file
+    save_list_to_csv(list_targets_no_seq, "unfound_protein_sequences.csv", "protein_id", "reason")
 
     # Save DFs with SMILES to CSV files
     os.makedirs("data/opentargets", exist_ok=True)
