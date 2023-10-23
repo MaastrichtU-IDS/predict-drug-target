@@ -1,5 +1,6 @@
 
 import esm
+import os
 import pandas as pd
 import torch
 from smiles_transformer import get_smiles_embeddings
@@ -13,14 +14,37 @@ from src.utils import (
     get_seq_for_target,
     get_smiles_for_drug,
     log,
+    get_pref_ids,
 )
 from src.vectordb import VectorDB, init_vectordb
 
+
+accept_namespaces = ["PUBCHEM.COMPOUND:", "UniProtKB:"]
 VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
+
+def get_sequences_embeddings(sequences: list[str]):
+    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    batch_converter = alphabet.get_batch_converter()
+    model.eval()  # disables dropout for deterministic results
+
+    data = [(target_id, target_seq) for target_seq, target_id in sequences.items()]
+    # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
+    batch_labels, batch_strs, batch_tokens = batch_converter(data)
+    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
+    # Extract per-residue representations (on CPU)
+    with torch.no_grad():
+        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
+    token_representations = results["representations"][33]
+    sequence_representations = []
+    for i, tokens_len in enumerate(batch_lens):
+        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
+
+    target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
+    return {seq: matrix for seq, matrix in zip(sequences.keys(), target_embeddings)}
 
 
 def compute_drug_embedding(
-    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG
+    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG, tmp_dir: str|None = None
 ) -> pd.DataFrame:
     """Compute embeddings for a list of drug ID based on its retrieved SMILES.
     Returns a pandas dataframe with a "drug" column containing the drug ID,
@@ -43,6 +67,7 @@ def compute_drug_embedding(
     list_drugs_no_smiles = []
     drugs_no_embed = {}
     labels_dict = {}
+    pref_ids = get_pref_ids(drugs, accept_namespaces)
     for drug_id in tqdm(drugs, desc="Check drugs in Vector DB, or get SMILES"):
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -53,19 +78,33 @@ def compute_drug_embedding(
             df.loc[len(df)] = embeddings
         else:
             # If not in vectordb we get its smile and add it to the list to compute
+            drug_smiles = None
             try:
                 drug_smiles, drug_label = get_smiles_for_drug(drug_id)
+            except Exception as e:
+                # Try getting SMILES with pref ID
+                if drug_id != pref_ids[drug_id]:
+                    try:
+                        drug_smiles, drug_label = get_smiles_for_drug(pref_ids[drug_id])
+                    except:
+                        pass
+            if drug_smiles:
                 drugs_no_embed[drug_smiles] = drug_id
                 labels_dict[drug_id] = drug_label
-            except Exception as e:
+            else:
                 list_drugs_no_smiles.append(drug_id)
-                print(e)
 
     if list_drugs_no_smiles:
-        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)} drugs")
+        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)}/{len(drugs)} drugs")
         log.info(list_drugs_no_smiles[:10])
     if not drugs_no_embed:  # No embeddings to generate
         return df
+
+    if tmp_dir:
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_df = pd.DataFrame([{"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]} for drug_id, smiles in drugs_no_embed])
+        tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
+
 
     # Then we compute embeddings for all drugs not in vectordb
     log.info(f"⏳💊 {len(drugs_no_embed)} Drugs not found in VectorDB, computing their embeddings from SMILES")
@@ -86,7 +125,7 @@ def compute_drug_embedding(
 
 
 def compute_target_embedding(
-    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET
+    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET, tmp_dir: str|None = None
 ) -> pd.DataFrame:
     """Compute embeddings for a list of target ID based on its retrieved amino acid sequence.
     Returns a pandas dataframe with a "target" column containing the target ID,
@@ -108,6 +147,7 @@ def compute_target_embedding(
     targets_no_embed = {}
     list_targets_no_seq = []
     labels_dict = {}
+    pref_ids = get_pref_ids(targets, accept_namespaces)
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -118,38 +158,36 @@ def compute_target_embedding(
             df.loc[len(df)] = embeddings
         else:
             # If not in vectordb we get its smile and add it to the list to compute
+            target_seq = None
             try:
                 target_seq, target_label = get_seq_for_target(target_id)
+            except:
+                # Try getting SMILES with pref ID
+                try:
+                    target_seq, target_label = get_seq_for_target(pref_ids[target_id])
+                except:
+                    pass
+            if target_seq:
                 targets_no_embed[target_seq] = target_id
                 labels_dict[target_id] = target_label
-            except:
+            else:
+                log.debug(f"Could not get the AA sequence for {target_id} | {pref_ids[target_id]}")
                 list_targets_no_seq.append(target_id)
 
     if list_targets_no_seq:
-        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)} targets")
+        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)}/{len(targets)} targets")
         log.info(list_targets_no_seq[:10])
     if not targets_no_embed:  # No embeddings to generate
         return df
 
+    if tmp_dir:
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_df = pd.DataFrame([{"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]} for target_id, aa_seq in targets_no_embed])
+        tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
+
     # Compute the missing targets embeddings
     log.info(f"⏳🎯 {len(targets_no_embed)} targets not found in VectorDB, computing their embeddings")
-    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-    batch_converter = alphabet.get_batch_converter()
-    model.eval()  # disables dropout for deterministic results
-    data = [(target_id, target_seq) for target_seq, target_id in targets_no_embed.items()]
-    # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
-    batch_labels, batch_strs, batch_tokens = batch_converter(data)
-    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
-    # Extract per-residue representations (on CPU)
-    with torch.no_grad():
-        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
-    token_representations = results["representations"][33]
-    sequence_representations = []
-    for i, tokens_len in enumerate(batch_lens):
-        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
-
-    target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
-    out_dict = {seq: matrix for seq, matrix in zip(targets_no_embed.keys(), target_embeddings)}
+    out_dict = get_sequences_embeddings(targets_no_embed)
 
     # Add the computed embeddings to the vectordb
     for target_seq, embeddings in out_dict.items():
