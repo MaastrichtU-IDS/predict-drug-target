@@ -100,7 +100,7 @@ def compute_drug_embedding(
 
     if tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
-        tmp_df = pd.DataFrame([{"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]} for drug_id, smiles in drugs_no_embed])
+        tmp_df = pd.DataFrame([{"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]} for drug_id, smiles in drugs_no_embed.items()])
         tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
 
 
@@ -110,7 +110,6 @@ def compute_drug_embedding(
 
     # Finally we add the newly computed embeddings to the vectordb
     for smiles, embeddings in embed_dict.items():
-        log.info(len(embeddings))
         drug_id = drugs_no_embed[smiles]
         upload_list.append(
             {"vector": embeddings, "payload": {"id": drug_id, "sequence": smiles, "label": labels_dict[drug_id]}}
@@ -180,7 +179,7 @@ def compute_target_embedding(
 
     if tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
-        tmp_df = pd.DataFrame([{"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]} for target_id, aa_seq in targets_no_embed])
+        tmp_df = pd.DataFrame([{"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]} for target_id, aa_seq in targets_no_embed.items()])
         tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
 
     # Compute the missing targets embeddings

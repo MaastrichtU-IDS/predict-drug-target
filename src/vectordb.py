@@ -84,17 +84,21 @@ class QdrantDB(VectorDB):
                     )
 
     def add(self, collection_name: str, item_list: list[str]) -> UpdateResult:
-        points_count = self.client.get_collection(collection_name).points_count
-        points_list = [
-            PointStruct(id=points_count + i + 1, vector=item["vector"], payload=item["payload"])
-            for i, item in enumerate(item_list)
-        ]
-        # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
-        operation_info = self.client.upsert(
-            collection_name=collection_name,
-            wait=True,
-            points=points_list,
-        )
+        batch_size = 1000
+        for i in range(0, len(item_list), batch_size):
+            item_batch = item_list[i:i + batch_size]
+            # TODO: load per 1000
+            points_count = self.client.get_collection(collection_name).points_count
+            points_list = [
+                PointStruct(id=points_count + i + 1, vector=item["vector"], payload=item["payload"])
+                for i, item in enumerate(item_batch)
+            ]
+            # PointStruct(id=2, vector=[0.19, 0.81, 0.75, 0.11], payload={"city": "London"}),
+            operation_info = self.client.upsert(
+                collection_name=collection_name,
+                wait=True,
+                points=points_list,
+            )
         return operation_info
 
     # Get the embeddings for a specific entity ID
