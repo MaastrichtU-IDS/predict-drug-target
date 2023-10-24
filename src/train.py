@@ -10,6 +10,7 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
+from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
@@ -227,7 +228,7 @@ def kfold_cv(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pr
     return scores_df
 
 
-######
+###### Main training function
 
 
 def train(
@@ -236,14 +237,15 @@ def train(
     df_targets_embeddings: pd.DataFrame,
     save_model: str = "models/drug_target.pkl",
 ):
-    """Training takes 3 dataframes as input:
+    """Training takes 3 dataframes as input, ideally use CURIEs for drug/target IDs:
     1. a df with known drug-target interactions (2 cols: drug, target)
     2. a df with drug embeddings: drug col + 512 cols for embeddings
     3. a df with target embeddings: target col + 1280 cols for embeddings
     """
-    embeddings = {}
-    embeddings["drug"] = df_drugs_embeddings
-    embeddings["target"] = df_targets_embeddings
+    embeddings = {
+        "drug": df_drugs_embeddings,
+        "target": df_targets_embeddings,
+    }
 
     today = date.today()
     results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
@@ -293,6 +295,33 @@ def train(
         pickle.dump(rf_model, f)
 
     return agg_df.to_dict(orient="records")
+
+
+def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
+    """Compute embeddings and train model to predict interactions for a dataframe with 2 cols: drug, target"""
+    if isinstance(df_known_dt, str):
+        df_known_dt = pd.read_csv(df_known_dt)
+
+    # These functions retrieves SMILES and compute embeddings in 1 batch
+    df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir=out_dir)
+    df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv", index=False)
+    log.info(f"Drugs embeddings saved to {out_dir}")
+
+    df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir=out_dir)
+    df_targets.to_csv(f"{out_dir}/targets_embeddings.csv", index=False)
+    log.info("Targets embeddings saved to {out_dir}")
+
+    # Remove from df_known_dt entries where we don't have SMILES or AA seq
+    known_dt_before = len(df_known_dt)
+    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_drugs[["target"]], on="target")
+    log.info(
+        f"Number of known interactions before and after removing rows for which we don't have smiles/sequence: {known_dt_before} > {len(df_known_dt)}"
+    )
+    df_known_dt.to_csv(f"{out_dir}/known_drugs_targets.csv", index=False)
+
+    # Run the training
+    log.info("Start training")
+    return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/drug_target.pkl")
 
 
 def run_training():

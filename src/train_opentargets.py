@@ -30,12 +30,12 @@ def extract_data_from_jsonl(filename):
             yield data.get("drugId", None), data.get("targetId", None)
 
 
-def prepare(target_directory, output_directory):
+def prepare(input_dir, out_dir):
     """Main function to orchestrate the extraction and saving process."""
     known_drug_targets = []
 
     # first extract the drug-target pairs from the opentargets json files
-    json_files = get_jsonl_files(target_directory)
+    json_files = get_jsonl_files(input_dir)
     for json_file in tqdm(json_files, desc="Processing files"):
         # log.info(json_file)
         for drugId, targetId in extract_data_from_jsonl(json_file):
@@ -45,29 +45,34 @@ def prepare(target_directory, output_directory):
                     "target": f"ENSEMBL:{targetId}",
                 }
             )
-    df_known_dt = pd.DataFrame(known_drug_targets)
 
     vectordb = init_vectordb(COLLECTIONS, recreate=False)
+    df_known_dt = pd.DataFrame(known_drug_targets)
 
     # These functions retrieves SMILES and compute embeddings in 1 batch
-    df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir="data/opentargets/")
-    df_drugs.to_csv("data/opentargets/drugs_embeddings.csv", index=False)
-    log.info("DRUGS EMBEDDINGS COMPUTED")
+    df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir=out_dir)
+    df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv", index=False)
+    log.info(f"Drugs embeddings saved to {out_dir}")
 
-    df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir="data/opentargets/")
-    df_targets.to_csv("data/opentargets/targets_embeddings.csv", index=False)
-    log.info("TARGETS EMBEDDINGS COMPUTED")
+    df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir=out_dir)
+    df_targets.to_csv(f"{out_dir}/targets_embeddings.csv", index=False)
+    log.info("Targets embeddings saved to {out_dir}")
 
     # Remove from df_known_dt entries where we don't have SMILES or AA seq
+    known_dt_before = len(df_known_dt)
     df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_drugs[["target"]], on="target")
+    log.info(
+        f"Number of known interactions before and after removing rows for which we don't have smiles/sequence: {known_dt_before} > {len(df_known_dt)}"
+    )
+    df_known_dt.to_csv(f"{out_dir}/known_drugs_targets.csv", index=False)
 
     # Run the training
     log.info("Start training")
-    train(df_known_dt, df_drugs, df_targets, "models/opentargets_drug_target.pkl")
+    train(df_known_dt, df_drugs, df_targets, save_model="models/opentargets_drug_target.pkl")
 
 
 if __name__ == "__main__":
     target_directory = "data/download/opentargets/knownDrugsAggregated"
-    output_directory = "data/processed"  # Replace with desired output CSV file name/path
+    output_directory = "data/opentargets"  # Replace with desired output CSV file name/path
     os.makedirs(output_directory, exist_ok=True)
     prepare(target_directory, output_directory)

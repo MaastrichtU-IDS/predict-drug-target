@@ -109,7 +109,7 @@ def compute_drug_embedding(
                 for smiles, drug_id in drugs_to_embed.items()
             ]
         )
-        tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
+        tmp_df.to_csv(f"{tmp_dir}/drugs_smiles.csv", index=False)
 
     # Then we compute embeddings for all drugs not in vectordb
     log.info(f"⏳💊 {len(drugs_to_embed)} Drugs not found in VectorDB, computing their embeddings from SMILES")
@@ -194,7 +194,7 @@ def compute_target_embedding(
                 for aa_seq, target_id in targets_to_embed.items()
             ]
         )
-        tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
+        tmp_df.to_csv(f"{tmp_dir}/targets_sequences.csv", index=False)
 
     # Compute the missing targets embeddings
     log.info(f"⏳🎯 {len(targets_to_embed)} targets not found in VectorDB, computing their embeddings")

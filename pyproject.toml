@@ -42,6 +42,7 @@ dependencies = [
     "requests",
     "qdrant-client",
     "PubChemPy",
+    "typer",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +57,9 @@ test = [
     "reasoner_validator",
     "types-requests",
 ]
+
+[project.scripts]
+predict-dt = "src.__main__:cli"
 
 
 [project.urls]
