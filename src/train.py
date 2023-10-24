@@ -16,7 +16,7 @@ from src.vectordb import init_vectordb
 vectordb = init_vectordb(COLLECTIONS, recreate=False)
 
 
-def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
+def load_protein_embeddings(path, embedding_layer=33, use_mean=True):
     import glob
 
     files = sorted(glob.glob(path + "/*.pt"))
@@ -47,7 +47,7 @@ def loadProteinEmbeddings(path, embedding_layer=33, use_mean=True):
     return target_embeddings_df
 
 
-def loadDrugEmbeddings(drug_labels_file, drug_embeddings_file):
+def load_drug_embeddings(drug_labels_file, drug_embeddings_file):
     drug_labels_df = pd.read_csv(drug_labels_file)
     drug_labels_df = drug_labels_df.drop(columns=["smiles", "drugs"])
     o = np.load(drug_embeddings_file)  # numpy.lib.npyio.NpzFile
@@ -65,12 +65,12 @@ def loadDrugEmbeddings(drug_labels_file, drug_embeddings_file):
     return drug_df
 
 
-def loadDrugTargets(path):
+def load_drug_targets(path):
     df = pd.read_csv(path)
     return df
 
 
-def generateDTPairs(dt_df):
+def generate_dt_pairs(dt_df):
     dtKnown = {tuple(x) for x in dt_df[["drug", "target"]].values}
     pairs = []
     labels = []
@@ -185,7 +185,7 @@ def cv_run(run_index, pairs, classes, embedding_df, train, test, fold_index, clf
     return all_scores
 
 
-def cvSpark(sc, run_index, pairs, classes, cv, embedding_df, clfs):
+def cv_distribute(sc, run_index, pairs, classes, cv, embedding_df, clfs):
     if sc:
         rdd = sc.parallelize(cv).map(lambda x: cv_run(run_index, pairs, classes, embedding_df, x[0], x[1], x[2], clfs))
         all_scores = rdd.collect()
@@ -198,7 +198,7 @@ def cvSpark(sc, run_index, pairs, classes, cv, embedding_df, clfs):
     return all_scores
 
 
-def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_proportion, n_seed):
+def kfold_cv(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_proportion, n_seed):
     if sc:
         bc_embedding_df = sc.broadcast(embedding_df)
     scores_df = pd.DataFrame()
@@ -216,13 +216,13 @@ def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pro
 
         if sc:
             bc_pairs_classes = sc.broadcast(pairs_classes)
-            scores = cvSpark(
+            scores = cv_distribute(
                 sc, r, bc_pairs_classes.value[0], bc_pairs_classes.value[1], cv_list, bc_embedding_df.value, clfs
             )
             for score in scores:
                 scores_df = pd.concat([scores_df, score], ignore_index=True)
         else:
-            scores = cvSpark(sc, r, pairs_classes[0], pairs_classes[1], cv_list, embedding_df, clfs)
+            scores = cv_distribute(sc, r, pairs_classes[0], pairs_classes[1], cv_list, embedding_df, clfs)
             scores_df = pd.concat([scores_df, scores], ignore_index=True)
     return scores_df
 
@@ -237,7 +237,7 @@ def train(
     save_model: str = "models/drug_target.pkl",
 ):
     """Training takes 3 dataframes as input:
-    1. a known drug-target interactions df (2 cols: drug, target)
+    1. a df with known drug-target interactions (2 cols: drug, target)
     2. a df with drug embeddings: drug col + 512 cols for embeddings
     3. a df with target embeddings: target col + 1280 cols for embeddings
     """
@@ -250,7 +250,7 @@ def train(
     agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
 
     # Get pairs
-    pairs, labels = generateDTPairs(df_known_interactions)
+    pairs, labels = generate_dt_pairs(df_known_interactions)
     ndrugs = len(embeddings["drug"])
     ntargets = len(embeddings["target"])
     unique, counts = np.unique(labels, return_counts=True)
@@ -280,7 +280,7 @@ def train(
     sc = None
 
     # Run training
-    all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
+    all_scores_df = kfold_cv(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
     all_scores_df.to_csv(results_file, sep=",", index=False)
 
     agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
@@ -298,14 +298,14 @@ def train(
 def run_training():
     """Original training for drug-targets from Bio2RDF"""
     protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
-    target_embeddings = loadProteinEmbeddings(protein_embeddings_path)
+    target_embeddings = load_protein_embeddings(protein_embeddings_path)
 
     drug_labels_path = "./data/download/drugbank_drugs.csv"
     drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
-    drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
+    drug_embeddings = load_drug_embeddings(drug_labels_path, drug_embeddings_path)
 
     drug_target_path = "./data/download/drugbank_drug_targets.csv"
-    df_known_interactions = loadDrugTargets(drug_target_path)
+    df_known_interactions = load_drug_targets(drug_target_path)
 
     train(df_known_interactions, drug_embeddings, target_embeddings)
 

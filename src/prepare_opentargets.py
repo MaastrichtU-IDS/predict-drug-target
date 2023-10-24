@@ -6,7 +6,7 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-from src.utils import COLLECTIONS, get_pref_ids, get_seq_for_target, get_smiles_for_drug, log
+from src.utils import ACCEPTED_NAMESPACES, COLLECTIONS, get_pref_ids, get_seq_for_target, get_smiles_for_drug, log
 from src.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
@@ -85,7 +85,9 @@ def prepare(target_directory, output_directory):
 
     df_known_dt = pd.DataFrame(known_drug_targets)
 
-    pref_ids = get_pref_ids(set(df_known_dt["drug"].tolist()).union(set(df_known_dt["target"].tolist())))
+    pref_ids = get_pref_ids(
+        set(df_known_dt["drug"].tolist()).union(set(df_known_dt["target"].tolist())), ACCEPTED_NAMESPACES
+    )
     # print(pref_ids)
 
     os.makedirs("data/opentargets", exist_ok=True)

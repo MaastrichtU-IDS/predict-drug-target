@@ -13,21 +13,6 @@ from src.vectordb import init_vectordb
 # NOTE: Download opentargets before running this script
 # ./scripts/download_opentargets.sh
 
-# We need to generate 3 dataframe/CSV to provide to training as input:
-# 1. a known drug-target interactions df (2 cols)
-# 2. a df with drug embeddings: drug col + 512 cols for embeddings
-# 2. a df with target embeddings: target col + 1280 cols for embeddings
-
-
-# A list of KNOWN drugs-interacts_with-targets (from opentarget)
-# Once we have this list, we just need to pass it to the compute_drug_embedding or compute_target_embedding functions
-# These functions returns a dataframe with a "drug" column for the ID, and all other columns are the embeddings
-# knownInteraction [ drug_id - target_id - 0 or 1 if interacts or not] (or could even be the mechanism of action string)
-# target_df[id - embeddings]
-# drugs_df[id - embeddings]
-# TODO: First we get the df of knownInteraction, then generate list of drugs, pass it to function to calculate embed, same for targets
-
-
 # Output file path
 output_file_path = "../data/opentargets/merged_parsed.csv"
 

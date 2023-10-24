@@ -69,42 +69,11 @@ def get_seq_for_target(target_id: str):
         return res["sequence"]["value"], res["proteinDescription"]["recommendedName"]["fullName"]["value"]
 
 
-def normalize_id_to_translator(ids_list: list):
-    """Use Translator SRI NodeNormalization API to get the preferred Translator ID
-    for an ID https://nodenormalization-sri.renci.org/docs
-    """
-    # print(len(ids_list))
-    converted_ids_obj = {}
-    resolve_curies = requests.post(
-        "https://nodenormalization-sri.renci.org/get_normalized_nodes",
-        json={"curies": ids_list, "conflate": True, "description": False, "drug_chemical_conflate": False},
-        headers={"accept": "application/json", "Content-Type": "application/json"},
-        timeout=TIMEOUT,
-    )
-    resolve_curies.raise_for_status()
-    # Get corresponding OMIM IDs for MONDO IDs if match
-    resp = resolve_curies.json()
-    # print(resp)
-    for converted_id, translator_ids in resp.items():
-        try:
-            pref_id = translator_ids["id"]["identifier"]
-            log.debug(converted_id + " > " + pref_id)
-            converted_ids_obj[converted_id] = pref_id
-        except Exception:
-            log.debug("❌️ " + converted_id + " > " + str(translator_ids))
-            converted_ids_obj[converted_id] = None
-
-    return converted_ids_obj
-
-
 def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
     """Use Translator SRI NodeNormalization API to get the preferred Translator ID
-    for an ID https://nodenormalization-sri.renci.org/docs
+    for an ID, a list of accepted namespaces can be passed https://nodenormalization-sri.renci.org/docs
     """
-    if not accepted_namespaces:
-        accepted_namespaces = ACCEPTED_NAMESPACES
-    # print(len(ids_list))
-    converted_ids_obj = {}
+    pref_ids = {}
     resolve_curies = requests.post(
         "https://nodenormalization-sri.renci.org/get_normalized_nodes",
         json={"curies": list(ids_list), "conflate": True, "description": False, "drug_chemical_conflate": False},
@@ -114,22 +83,23 @@ def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
     resolve_curies.raise_for_status()
     resp = resolve_curies.json()
     # print(resp)
-    for converted_id, translator_ids in resp.items():
+    for original_id, available_ids in resp.items():
+        pref_id = None
         try:
-            pref_id = None
-            for ns in accepted_namespaces:
-                if translator_ids["id"]["identifier"].lower().startswith(ns.lower()):
-                    pref_id = translator_ids["id"]["identifier"]
-            if not pref_id:
-                for alt_id in translator_ids["equivalent_identifiers"]:
-                    for ns in accepted_namespaces:
-                        if alt_id["identifier"].lower().startswith(ns.lower()):
-                            pref_id = alt_id["identifier"]
-
-            log.debug(converted_id + " > " + pref_id)
+            if not accepted_namespaces:
+                pref_id = available_ids["id"]["identifier"]
+            else:
+                for ns in accepted_namespaces:
+                    if available_ids["id"]["identifier"].lower().startswith(ns.lower()):
+                        pref_id = available_ids["id"]["identifier"]
+                if not pref_id:
+                    for alt_id in available_ids["equivalent_identifiers"]:
+                        for ns in accepted_namespaces:
+                            if alt_id["identifier"].lower().startswith(ns.lower()):
+                                pref_id = alt_id["identifier"]
+            # log.debug(f"{original_id} > {pref_id}")
         except Exception:
-            log.debug("❌️ " + converted_id + " > " + str(translator_ids))
-            pref_id = converted_id
-        converted_ids_obj[converted_id] = pref_id
-
-    return converted_ids_obj
+            log.debug(f"Could not find pref ID for {original_id} in {available_ids}")
+            pref_id = original_id
+        pref_ids[original_id] = pref_id
+    return pref_ids

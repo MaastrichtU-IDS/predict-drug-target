@@ -7,6 +7,7 @@ from smiles_transformer import get_smiles_embeddings
 from tqdm import tqdm
 
 from src.utils import (
+    ACCEPTED_NAMESPACES,
     COLLECTIONS,
     EMBEDDINGS_SIZE_DRUG,
     EMBEDDINGS_SIZE_TARGET,
@@ -59,14 +60,13 @@ def compute_drug_embedding(
         df = pd.DataFrame.from_records(drugs_list)
         return df
 
-    # TODO: make sure drugs in the list are unique
-
     # Otherwise check if drug embedding already in vectordb
+    drugs = list(set(drugs))
     upload_list = []
     list_drugs_no_smiles = []
-    drugs_no_embed = {}
+    drugs_to_embed = {}
     labels_dict = {}
-    pref_ids = get_pref_ids(drugs)
+    pref_id = get_pref_ids(drugs, ACCEPTED_NAMESPACES)
     for drug_id in tqdm(drugs, desc="Check drugs in Vector DB, or get SMILES"):
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
@@ -81,22 +81,24 @@ def compute_drug_embedding(
             try:
                 drug_smiles, drug_label = get_smiles_for_drug(drug_id)
             except Exception:
-                # Try getting SMILES with pref ID
-                if drug_id != pref_ids[drug_id]:
+                # If main ID fails, we try getting SMILES with pref ID
+                if drug_id != pref_id[drug_id]:
                     try:
-                        drug_smiles, drug_label = get_smiles_for_drug(pref_ids[drug_id])
+                        drug_smiles, drug_label = get_smiles_for_drug(pref_id[drug_id])
                     except:
                         pass
             if drug_smiles:
-                drugs_no_embed[drug_smiles] = drug_id
+                drugs_to_embed[drug_smiles] = drug_id
                 labels_dict[drug_id] = drug_label
             else:
+                log.debug(f"Could not get the SMILES for {drug_id} | {pref_id[drug_id]}")
                 list_drugs_no_smiles.append(drug_id)
 
     if list_drugs_no_smiles:
-        log.info(f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)}/{len(drugs)} drugs")
-        log.info(list_drugs_no_smiles[:10])
-    if not drugs_no_embed:  # No embeddings to generate
+        log.info(
+            f"⚠️ We could not find SMILES for {len(list_drugs_no_smiles)}/{len(drugs)} drugs , e.g. {', '.join(list_drugs_no_smiles[:5])}"
+        )
+    if not drugs_to_embed:  # No embeddings to generate
         return df
 
     if tmp_dir:
@@ -104,18 +106,18 @@ def compute_drug_embedding(
         tmp_df = pd.DataFrame(
             [
                 {"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]}
-                for smiles, drug_id in drugs_no_embed.items()
+                for smiles, drug_id in drugs_to_embed.items()
             ]
         )
         tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
 
     # Then we compute embeddings for all drugs not in vectordb
-    log.info(f"⏳💊 {len(drugs_no_embed)} Drugs not found in VectorDB, computing their embeddings from SMILES")
-    embed_dict = get_smiles_embeddings(list(drugs_no_embed.keys()))
+    log.info(f"⏳💊 {len(drugs_to_embed)} Drugs not found in VectorDB, computing their embeddings from SMILES")
+    embed_dict = get_smiles_embeddings(list(drugs_to_embed.keys()))
 
     # Finally we add the newly computed embeddings to the vectordb
     for smiles, embeddings in embed_dict.items():
-        drug_id = drugs_no_embed[smiles]
+        drug_id = drugs_to_embed[smiles]
         upload_list.append(
             {"vector": embeddings, "payload": {"id": drug_id, "sequence": smiles, "label": labels_dict[drug_id]}}
         )
@@ -145,11 +147,12 @@ def compute_target_embedding(
         return df
 
     # Otherwise check if target embedding already in vectordb
+    targets = list(set(targets))
     upload_list = []
-    targets_no_embed = {}
+    targets_to_embed = {}
     list_targets_no_seq = []
     labels_dict = {}
-    pref_ids = get_pref_ids(targets)
+    pref_id = get_pref_ids(targets, ACCEPTED_NAMESPACES)
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -164,22 +167,23 @@ def compute_target_embedding(
             try:
                 target_seq, target_label = get_seq_for_target(target_id)
             except:
-                # Try getting SMILES with pref ID
+                # If main ID fails, we try getting SMILES with pref ID
                 try:
-                    target_seq, target_label = get_seq_for_target(pref_ids[target_id])
+                    target_seq, target_label = get_seq_for_target(pref_id[target_id])
                 except:
                     pass
             if target_seq:
-                targets_no_embed[target_seq] = target_id
+                targets_to_embed[target_seq] = target_id
                 labels_dict[target_id] = target_label
             else:
-                log.debug(f"Could not get the AA sequence for {target_id} | {pref_ids[target_id]}")
+                log.debug(f"Could not get the AA sequence for {target_id} | {pref_id[target_id]}")
                 list_targets_no_seq.append(target_id)
 
     if list_targets_no_seq:
-        log.info(f"⚠️ We could not find AA sequences for {len(list_targets_no_seq)}/{len(targets)} targets")
-        log.info(list_targets_no_seq[:10])
-    if not targets_no_embed:  # No embeddings to generate
+        log.info(
+            f"⚠️ We could not find Amino Acid sequences for {len(list_targets_no_seq)}/{len(targets)} targets, e.g. {', '.join(list_targets_no_seq[:5])}"
+        )
+    if not targets_to_embed:  # No embeddings to generate
         return df
 
     if tmp_dir:
@@ -187,18 +191,18 @@ def compute_target_embedding(
         tmp_df = pd.DataFrame(
             [
                 {"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]}
-                for aa_seq, target_id in targets_no_embed.items()
+                for aa_seq, target_id in targets_to_embed.items()
             ]
         )
         tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
 
     # Compute the missing targets embeddings
-    log.info(f"⏳🎯 {len(targets_no_embed)} targets not found in VectorDB, computing their embeddings")
-    out_dict = get_sequences_embeddings(targets_no_embed)
+    log.info(f"⏳🎯 {len(targets_to_embed)} targets not found in VectorDB, computing their embeddings")
+    out_dict = get_sequences_embeddings(targets_to_embed)
 
     # Add the computed embeddings to the vectordb
     for target_seq, embeddings in out_dict.items():
-        target_id = targets_no_embed[target_seq]
+        target_id = targets_to_embed[target_seq]
         upload_list.append(
             {
                 "vector": embeddings,
