@@ -70,7 +70,7 @@ def compute_drug_embedding(
     for drug_id in tqdm(drugs, desc="Check drugs in Vector DB, or get SMILES"):
         from_vectordb = vectordb.get("drug", drug_id)
         if len(from_vectordb) > 0:
-            log.info(f"♻️ Drug {from_vectordb[0].payload['id']} retrieved from VectorDB")
+            log.debug(f"♻️ Drug {from_vectordb[0].payload['id']} retrieved from VectorDB")
             embeddings = from_vectordb[0].vector
             embeddings.insert(0, drug_id)
             # df = pd.concat([df, pd.DataFrame(embeddings)], ignore_index = True)
@@ -157,7 +157,7 @@ def compute_target_embedding(
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
         if len(from_vectordb) > 0:
-            log.info(f"♻️ Target {from_vectordb[0].payload['id']} retrieved from VectorDB")
+            log.debug(f"♻️ Target {from_vectordb[0].payload['id']} retrieved from VectorDB")
             embeddings = from_vectordb[0].vector
             embeddings.insert(0, target_id)
             df.loc[len(df)] = embeddings
