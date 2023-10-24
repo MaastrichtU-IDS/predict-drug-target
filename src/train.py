@@ -10,7 +10,7 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
-from src.utils import COLLECTIONS, get_smiles_for_drug, log, normalize_id_to_translator
+from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
 vectordb = init_vectordb(COLLECTIONS, recreate=False)
@@ -230,63 +230,45 @@ def kfoldCV(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_pro
 ######
 
 
-def train():
+def train(
+    df_known_interactions: pd.DataFrame,
+    df_drugs_embeddings: pd.DataFrame,
+    df_targets_embeddings: pd.DataFrame,
+    save_model: str = "models/drug_target.pkl",
+):
+    """Training takes 3 dataframes as input:
+    1. a known drug-target interactions df (2 cols: drug, target)
+    2. a df with drug embeddings: drug col + 512 cols for embeddings
+    3. a df with target embeddings: target col + 1280 cols for embeddings
+    """
     embeddings = {}
-    protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
-    embeddings["target"] = loadProteinEmbeddings(protein_embeddings_path)
-
-    drug_labels_path = "./data/download/drugbank_drugs.csv"
-    drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
-    drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
-    embeddings["drug"] = drug_embeddings
-
-    drug_target_path = "./data/download/drugbank_drug_targets.csv"
-    dt_df = loadDrugTargets(drug_target_path)
+    embeddings["drug"] = df_drugs_embeddings
+    embeddings["target"] = df_targets_embeddings
 
     today = date.today()
     results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
     agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
 
-    ## Store all drugs vectors in the vector db
-
-    drugs_list = [f"DRUGBANK:{drug_id}" for drug_id in embeddings["drug"]["drug"]]
-    pubchem_ids = normalize_id_to_translator(drugs_list)
-    # 416 drugs dont have a Pubchem ID as pref ID, we ignore them for now
-
-#     # Add drug embeddings to the vector db
-#     failed_conversion = []
-#     vector_list = []
-#     for _index, row in embeddings["drug"].iterrows():
-#         log.info(f"Drug {_index}/{len(embeddings['drug'])}")
-#         vector = [row[column] for column in embeddings["drug"].columns if column != "drug"]
-#         # if pubchem_id not in pubchem_ids:
-#         #     failed_conversion.append(row['drug'])
-#         #     continue
-#         drug_id = pubchem_ids[f"DRUGBANK:{row['drug']}"]
-
-#         # pubchem = normalize_id_to_translator()
-#         try:
-#             drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-#             vector_list.append({"vector": vector, "payload": {"id": drug_id, "sequence": drug_smiles, "label": drug_label}})
-#         except: 
-#             failed_conversion.append(drug_id)
-    
-#     log.info(f"⚠️ Failed to get SMILES for {len(failed_conversion)} drugs：{failed_conversion}")
-#     vectordb.add("drug", vector_list)
-
-    pairs, labels = generateDTPairs(dt_df)
+    # Get pairs
+    pairs, labels = generateDTPairs(df_known_interactions)
     ndrugs = len(embeddings["drug"])
     ntargets = len(embeddings["target"])
-    print(f"Drugs: {ndrugs}")
-    print(f"Targets: {ntargets}")
     unique, counts = np.unique(labels, return_counts=True)
     ndrugtargets = counts[1]
-    print(f"Drug-Targets: {ndrugtargets}")
+    log.info(f"Training based on {ndrugtargets} Drug-Targets known interactions: {ndrugs} drugs | {ntargets} targets")
 
     # nb_model = GaussianNB()
     # lr_model = linear_model.LogisticRegression()
     # rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
-    rf_model = ensemble.RandomForestClassifier(n_estimators=200, criterion='log_loss', max_depth=None, min_samples_split=2, min_samples_leaf=1, max_features='sqrt', n_jobs=-1)
+    rf_model = ensemble.RandomForestClassifier(
+        n_estimators=200,
+        criterion="log_loss",
+        max_depth=None,
+        min_samples_split=2,
+        min_samples_leaf=1,
+        max_features="sqrt",
+        n_jobs=-1,
+    )
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
     clfs = [("Random Forest", rf_model)]
@@ -296,23 +278,37 @@ def train():
     n_run = 2
     n_proportion = 1
     sc = None
+
+    # Run training
     all_scores_df = kfoldCV(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
     all_scores_df.to_csv(results_file, sep=",", index=False)
 
     agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
     agg_df.to_csv(agg_results_file, sep=",", index=False)
-    print("overall:")
+    log.info("Aggregated results:")
     print(agg_df)
 
     os.makedirs("models", exist_ok=True)
-    with open("models/drug_target.pkl", "wb") as f:
+    with open(save_model, "wb") as f:
         pickle.dump(rf_model, f)
-
-    # with open("models/embeddings.pkl", "wb") as f:
-    #     pickle.dump(embeddings, f)
 
     return agg_df.to_dict(orient="records")
 
 
+def run_training():
+    """Original training for drug-targets from Bio2RDF"""
+    protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
+    target_embeddings = loadProteinEmbeddings(protein_embeddings_path)
+
+    drug_labels_path = "./data/download/drugbank_drugs.csv"
+    drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
+    drug_embeddings = loadDrugEmbeddings(drug_labels_path, drug_embeddings_path)
+
+    drug_target_path = "./data/download/drugbank_drug_targets.csv"
+    df_known_interactions = loadDrugTargets(drug_target_path)
+
+    train(df_known_interactions, drug_embeddings, target_embeddings)
+
+
 if __name__ == "__main__":
-    train()
+    run_training()

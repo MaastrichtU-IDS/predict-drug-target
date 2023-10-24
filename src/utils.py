@@ -1,7 +1,7 @@
 import logging
 
-import requests
 import pubchempy as pcp
+import requests
 
 VECTORDB_MAX_LIMIT = 100000
 

@@ -12,7 +12,7 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 
-from src.utils import BOLD, END, log
+from src.utils import log
 
 
 # Define an abstract class VectorDB
@@ -61,7 +61,10 @@ class QdrantDB(VectorDB):
                 self.client.create_payload_index(collection["name"], "id", "keyword")
         else:
             try:
-                collec_list = [f"{self.client.get_collection(collec['name']).points_count} {collec['name']}" for collec in collections]
+                collec_list = [
+                    f"{self.client.get_collection(collec['name']).points_count} {collec['name']}"
+                    for collec in collections
+                ]
                 log.info(f"Vector DB initialized: {' | '.join(collec_list)}")
             except Exception as e:
                 log.info(f"⚠️ Collection not found: {e}, recreating the collections")
@@ -86,7 +89,7 @@ class QdrantDB(VectorDB):
     def add(self, collection_name: str, item_list: list[str]) -> UpdateResult:
         batch_size = 1000
         for i in range(0, len(item_list), batch_size):
-            item_batch = item_list[i:i + batch_size]
+            item_batch = item_list[i : i + batch_size]
             # TODO: load per 1000
             points_count = self.client.get_collection(collection_name).points_count
             points_list = [

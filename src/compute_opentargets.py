@@ -1,15 +1,13 @@
-import csv
 import glob
 import json
 import os
 
 import pandas as pd
-import requests
 from tqdm import tqdm
-import logging
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.utils import COLLECTIONS, log, get_smiles_for_drug, get_seq_for_target, get_pref_ids
+from src.train import train
+from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
@@ -62,23 +60,25 @@ def prepare(target_directory, output_directory):
                     "target": f"ENSEMBL:{targetId}",
                 }
             )
+    df_known_dt = pd.DataFrame(known_drug_targets)
 
     vectordb = init_vectordb(COLLECTIONS, recreate=False)
 
-    df_known_dt = pd.DataFrame(known_drug_targets)
-
-
     # These functions retrieves SMILES and compute embeddings in 1 batch
     df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir="data/opentargets/")
+    df_drugs.to_csv("data/opentargets/drugs_embeddings.csv", index=False)
     log.info("DRUGS EMBEDDINGS COMPUTED")
+
     df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir="data/opentargets/")
+    df_targets.to_csv("data/opentargets/targets_embeddings.csv", index=False)
     log.info("TARGETS EMBEDDINGS COMPUTED")
 
-    df_drugs.to_csv('data/opentargets/drugs_embeddings.csv', index=False)
-    df_targets.to_csv('data/opentargets/targets_embeddings.csv', index=False)
+    # Remove from df_known_dt entries where we don't have SMILES or AA seq
+    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_drugs[["target"]], on="target")
 
-    # TODO: remove from df_known_dt entries where we don't have SMILES or AA seq
-
+    # Run the training
+    log.info("Start training")
+    train(df_known_dt, df_drugs, df_targets, "models/opentargets_drug_target.pkl")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
+import os
 
 import esm
-import os
 import pandas as pd
 import torch
 from smiles_transformer import get_smiles_embeddings
@@ -11,14 +11,15 @@ from src.utils import (
     EMBEDDINGS_SIZE_DRUG,
     EMBEDDINGS_SIZE_TARGET,
     VECTORDB_MAX_LIMIT,
+    get_pref_ids,
     get_seq_for_target,
     get_smiles_for_drug,
     log,
-    get_pref_ids,
 )
 from src.vectordb import VectorDB, init_vectordb
 
 VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
+
 
 def get_sequences_embeddings(sequences: list[str]):
     model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
@@ -42,7 +43,7 @@ def get_sequences_embeddings(sequences: list[str]):
 
 
 def compute_drug_embedding(
-    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG, tmp_dir: str|None = None
+    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG, tmp_dir: str | None = None
 ) -> pd.DataFrame:
     """Compute embeddings for a list of drug ID based on its retrieved SMILES.
     Returns a pandas dataframe with a "drug" column containing the drug ID,
@@ -79,7 +80,7 @@ def compute_drug_embedding(
             drug_smiles = None
             try:
                 drug_smiles, drug_label = get_smiles_for_drug(drug_id)
-            except Exception as e:
+            except Exception:
                 # Try getting SMILES with pref ID
                 if drug_id != pref_ids[drug_id]:
                     try:
@@ -100,9 +101,13 @@ def compute_drug_embedding(
 
     if tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
-        tmp_df = pd.DataFrame([{"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]} for drug_id, smiles in drugs_no_embed.items()])
-        tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
-
+        tmp_df = pd.DataFrame(
+            [
+                {"drug": drug_id, "smiles": smiles, "label": labels_dict[drug_id]}
+                for smiles, drug_id in drugs_no_embed.items()
+            ]
+        )
+        tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
 
     # Then we compute embeddings for all drugs not in vectordb
     log.info(f"⏳💊 {len(drugs_no_embed)} Drugs not found in VectorDB, computing their embeddings from SMILES")
@@ -122,7 +127,7 @@ def compute_drug_embedding(
 
 
 def compute_target_embedding(
-    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET, tmp_dir: str|None = None
+    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET, tmp_dir: str | None = None
 ) -> pd.DataFrame:
     """Compute embeddings for a list of target ID based on its retrieved amino acid sequence.
     Returns a pandas dataframe with a "target" column containing the target ID,
@@ -179,8 +184,13 @@ def compute_target_embedding(
 
     if tmp_dir:
         os.makedirs(tmp_dir, exist_ok=True)
-        tmp_df = pd.DataFrame([{"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]} for target_id, aa_seq in targets_no_embed.items()])
-        tmp_df.to_csv(f'{tmp_dir}compute_drugs_embeddings_smiles.csv', index=False)
+        tmp_df = pd.DataFrame(
+            [
+                {"target": target_id, "sequence": aa_seq, "label": labels_dict[target_id]}
+                for aa_seq, target_id in targets_no_embed.items()
+            ]
+        )
+        tmp_df.to_csv(f"{tmp_dir}compute_drugs_embeddings_smiles.csv", index=False)
 
     # Compute the missing targets embeddings
     log.info(f"⏳🎯 {len(targets_no_embed)} targets not found in VectorDB, computing their embeddings")
