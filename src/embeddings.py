@@ -44,7 +44,7 @@ def get_sequences_embeddings(sequences: list[str]):
 
 
 def compute_drug_embedding(
-    vectordb: VectorDB, drugs: list[str] | None = None, length: int = EMBEDDINGS_SIZE_DRUG, tmp_dir: str | None = None
+    vectordb: VectorDB, drugs: list[str] | None = None, tmp_dir: str | None = None, length: int = EMBEDDINGS_SIZE_DRUG
 ) -> pd.DataFrame:
     """Compute embeddings for a list of drug ID based on its retrieved SMILES.
     Returns a pandas dataframe with a "drug" column containing the drug ID,
@@ -129,7 +129,7 @@ def compute_drug_embedding(
 
 
 def compute_target_embedding(
-    vectordb: VectorDB, targets: list[str], length: int = EMBEDDINGS_SIZE_TARGET, tmp_dir: str | None = None
+    vectordb: VectorDB, targets: list[str], tmp_dir: str | None = None, length: int = EMBEDDINGS_SIZE_TARGET
 ) -> pd.DataFrame:
     """Compute embeddings for a list of target ID based on its retrieved amino acid sequence.
     Returns a pandas dataframe with a "target" column containing the target ID,
