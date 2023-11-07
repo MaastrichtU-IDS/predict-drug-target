@@ -317,6 +317,7 @@ def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
     # df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir=out_dir)
     df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv", index=False)
     log.info(f"Drugs embeddings saved to {out_dir}")
+
     # df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir=out_dir)
     df_targets.to_csv(f"{out_dir}/targets_embeddings.csv", index=False)
     log.info("Targets embeddings saved to {out_dir}")

@@ -22,27 +22,6 @@ from src.vectordb import VectorDB, init_vectordb
 VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
 
 
-def get_sequences_embeddings(sequences: list[str]):
-    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-    batch_converter = alphabet.get_batch_converter()
-    model.eval()  # disables dropout for deterministic results
-
-    data = [(target_id, target_seq) for target_seq, target_id in sequences.items()]
-    # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
-    batch_labels, batch_strs, batch_tokens = batch_converter(data)
-    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
-    # Extract per-residue representations (on CPU)
-    with torch.no_grad():
-        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
-    token_representations = results["representations"][33]
-    sequence_representations = []
-    for i, tokens_len in enumerate(batch_lens):
-        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
-
-    target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
-    return {seq: matrix for seq, matrix in zip(sequences.keys(), target_embeddings)}
-
-
 def compute_drug_embedding(
     vectordb: VectorDB, drugs: list[str] | None = None, tmp_dir: str | None = None, length: int = EMBEDDINGS_SIZE_DRUG
 ) -> pd.DataFrame:
@@ -128,6 +107,70 @@ def compute_drug_embedding(
     return df
 
 
+
+
+def get_sequences_embeddings_bulk(sequences: dict[str, str]):
+    """NOTE: NOT USED, CRASHES WHEN LIST TOO LONG"""
+    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    batch_converter = alphabet.get_batch_converter()
+    model.eval()  # disables dropout for deterministic results
+
+    data = [(target_id, target_seq) for target_seq, target_id in sequences.items()]
+
+    log.info(f"TARGET TUPLE LIST {len(data)}")
+    log.info(data[:4])
+
+    # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
+    batch_labels, batch_strs, batch_tokens = batch_converter(data)
+    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
+    # Extract per-residue representations (on CPU)
+
+    log.info("batch_tokens EXTRACTED")
+
+    with torch.no_grad():
+        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
+
+    log.info("MODEL IS DONE")
+    token_representations = results["representations"][33]
+    sequence_representations = []
+    for i, tokens_len in enumerate(batch_lens):
+        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
+
+    log.info("sequence_representations DONE")
+
+    target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
+    return {seq: matrix for seq, matrix in zip(sequences.keys(), target_embeddings)}
+
+
+
+def get_sequences_embeddings(sequences: dict[str, str]):
+    model, alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    batch_converter = alphabet.get_batch_converter()
+    model.eval()  # disables dropout for deterministic results
+
+    target_dict = {}
+    for target_seq, target_id in sequences.items():
+        log.info(f"GENERATING TARGETS EMBEDDINGS FOR {target_id} - {target_seq}")
+        data = [(target_id, target_seq)]
+        # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
+        batch_labels, batch_strs, batch_tokens = batch_converter(data)
+        batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
+
+        # Extract per-residue representations (on CPU)
+        with torch.no_grad():
+            results = model(batch_tokens, repr_layers=[33], return_contacts=True)
+
+        token_representations = results["representations"][33]
+        sequence_representations = []
+        for i, tokens_len in enumerate(batch_lens):
+            sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
+        target_embeddings = torch.stack(sequence_representations, dim=0).numpy().tolist()  # numpy.ndarray 3775 x 1280
+
+        target_dict[target_seq] = target_embeddings[0]
+    return target_dict
+
+
+
 def compute_target_embedding(
     vectordb: VectorDB, targets: list[str], tmp_dir: str | None = None, length: int = EMBEDDINGS_SIZE_TARGET
 ) -> pd.DataFrame:
@@ -153,6 +196,12 @@ def compute_target_embedding(
     list_targets_no_seq = []
     labels_dict = {}
     pref_id = get_pref_ids(targets, ACCEPTED_NAMESPACES)
+
+    # dup_target = []
+    # # TODO: also check for duplicate AA seq
+    # if target_seq in targets_to_embed:
+    #     dup_target.append(target_seq)
+
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -198,6 +247,8 @@ def compute_target_embedding(
 
     # Compute the missing targets embeddings
     log.info(f"⏳🎯 {len(targets_to_embed)} targets not found in VectorDB, computing their embeddings")
+    log.info(len(set(targets_to_embed.values())))
+
     out_dict = get_sequences_embeddings(targets_to_embed)
 
     # Add the computed embeddings to the vectordb

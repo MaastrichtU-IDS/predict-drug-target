@@ -17,7 +17,7 @@ from src.vectordb import init_vectordb
 output_file_path = "../data/opentargets/merged_parsed.csv"
 
 
-def get_jsonl_files(target_directory):
+def get_jsonl_files(target_directory) -> list[str]:
     """Return a list of JSONL files from the target directory."""
     return glob.glob(os.path.join(target_directory, "*.json"))
 
@@ -49,6 +49,7 @@ def train_opentargets(input_dir, out_dir):
     df_known_dt = pd.DataFrame(known_drug_targets)
     # print(df_known_dt)
     scores = compute_and_train(df_known_dt, out_dir)
+
 
 
 if __name__ == "__main__":
