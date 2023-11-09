@@ -18,6 +18,60 @@ from src.vectordb import init_vectordb
 vectordb = init_vectordb(recreate=False)
 
 
+def load_protein_embeddings(path, embedding_layer=33, use_mean=True):
+    import glob
+
+    files = sorted(glob.glob(path + "/*.pt"))
+    protein_embeddings = []
+    protein_labels = []
+    for file in files:
+        try:
+            label = file.split(".pt")[0].split("/")[-1]
+            embs = torch.load(file)
+            representation = "representations"
+            if use_mean:
+                representation = "mean_representations"
+            emb = embs[representation][embedding_layer]  # this is a torch.Tensor
+            # the mean_representations are the same size for each entry
+            # the per_tok embedding, it is seq size by 1280
+            protein_embeddings.append(emb)
+            protein_labels.append(label)
+        except Exception:
+            print(f"unable to open {file}")
+            continue
+
+    # vectors = np.stack([emb.mean(axis=0) for emb in embeddings])
+    Xs = torch.stack(protein_embeddings, dim=0).numpy()  # numpy.ndarray 3775 x 1280
+    target_labels_df = pd.DataFrame(protein_labels, columns=["target"])
+    target_embeddings_df = pd.DataFrame(Xs)
+    target_embeddings_df["target"] = target_labels_df["target"]
+    # target_df = target_labels_df.merge(target_embeddings_df, how='cross')
+    return target_embeddings_df
+
+
+def load_drug_embeddings(drug_labels_file, drug_embeddings_file):
+    drug_labels_df = pd.read_csv(drug_labels_file)
+    drug_labels_df = drug_labels_df.drop(columns=["smiles", "drugs"])
+    o = np.load(drug_embeddings_file)  # numpy.lib.npyio.NpzFile
+    files = o.files  # 5975 files
+    embeddings = []
+    for file in files:
+        # print(file)
+        emb = o[file]  # emb 'numpy.ndarray' n length x 512
+        embeddings.append(emb)
+        # print(emb.shape)
+    vectors = np.stack([emb.mean(axis=0) for emb in embeddings])
+    # vectors.shape # 5975, 512
+    df = pd.DataFrame(vectors)
+    drug_df = drug_labels_df.merge(df, left_index=True, right_index=True)
+    return drug_df
+
+
+def load_drug_targets(path):
+    df = pd.read_csv(path)
+    return df
+
+
 def generate_dt_pairs(dt_df):
     dtKnown = {tuple(x) for x in dt_df[["drug", "target"]].values}
     pairs = []
@@ -133,16 +187,22 @@ def cv_run(run_index, pairs, classes, embedding_df, train, test, fold_index, clf
     return all_scores
 
 
-def cv_distribute(run_index, pairs, classes, cv, embedding_df, clfs):
-    all_scores = pd.DataFrame()
-    for fold in cv:
-        scores = cv_run(run_index, pairs, classes, embedding_df, fold[0], fold[1], fold[2], clfs)
-        all_scores = pd.concat([all_scores, scores], ignore_index=True)
+def cv_distribute(sc, run_index, pairs, classes, cv, embedding_df, clfs):
+    if sc:
+        rdd = sc.parallelize(cv).map(lambda x: cv_run(run_index, pairs, classes, embedding_df, x[0], x[1], x[2], clfs))
+        all_scores = rdd.collect()
+    else:
+        all_scores = pd.DataFrame()
+        for x in cv:
+            scores = cv_run(run_index, pairs, classes, embedding_df, x[0], x[1], x[2], clfs)
+            all_scores = pd.concat([all_scores, scores], ignore_index=True)
 
     return all_scores
 
 
-def kfold_cv(pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_proportion, n_seed):
+def kfold_cv(sc, pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_proportion, n_seed):
+    if sc:
+        bc_embedding_df = sc.broadcast(embedding_df)
     scores_df = pd.DataFrame()
     for r in range(1, n_run + 1):
         n_seed += r
@@ -156,8 +216,16 @@ def kfold_cv(pairs_all, classes_all, embedding_df, clfs, n_run, n_fold, n_propor
         pairs_classes = (pairs, classes)
         cv_list = [(train, test, k) for k, (train, test) in enumerate(cv)]
 
-        scores = cv_distribute(r, pairs_classes[0], pairs_classes[1], cv_list, embedding_df, clfs)
-        scores_df = pd.concat([scores_df, scores], ignore_index=True)
+        if sc:
+            bc_pairs_classes = sc.broadcast(pairs_classes)
+            scores = cv_distribute(
+                sc, r, bc_pairs_classes.value[0], bc_pairs_classes.value[1], cv_list, bc_embedding_df.value, clfs
+            )
+            for score in scores:
+                scores_df = pd.concat([scores_df, score], ignore_index=True)
+        else:
+            scores = cv_distribute(sc, r, pairs_classes[0], pairs_classes[1], cv_list, embedding_df, clfs)
+            scores_df = pd.concat([scores_df, scores], ignore_index=True)
     return scores_df
 
 
@@ -212,9 +280,10 @@ def train(
     n_fold = 10
     n_run = 2
     n_proportion = 1
+    sc = None
 
     # Run training
-    all_scores_df = kfold_cv(pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
+    all_scores_df = kfold_cv(sc, pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
     all_scores_df.to_csv(results_file, sep=",", index=False)
 
     agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
@@ -264,3 +333,22 @@ def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
     # Run the training
     log.info("Start training")
     return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/drug_target.pkl")
+
+
+def run_training():
+    """Original training for drug-targets from Bio2RDF"""
+    protein_embeddings_path = "./data/vectors/drugbank_targets_esm2_l33_mean"
+    target_embeddings = load_protein_embeddings(protein_embeddings_path)
+
+    drug_labels_path = "./data/download/drugbank_drugs.csv"
+    drug_embeddings_path = "./data/vectors/drugbank_smiles.npz"
+    drug_embeddings = load_drug_embeddings(drug_labels_path, drug_embeddings_path)
+
+    drug_target_path = "./data/download/drugbank_drug_targets.csv"
+    df_known_interactions = load_drug_targets(drug_target_path)
+
+    train(df_known_interactions, drug_embeddings, target_embeddings)
+
+
+if __name__ == "__main__":
+    run_training()
