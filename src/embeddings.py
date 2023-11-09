@@ -8,7 +8,6 @@ from tqdm import tqdm
 
 from src.utils import (
     ACCEPTED_NAMESPACES,
-    COLLECTIONS,
     EMBEDDINGS_SIZE_DRUG,
     EMBEDDINGS_SIZE_TARGET,
     VECTORDB_MAX_LIMIT,
