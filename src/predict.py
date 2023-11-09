@@ -13,7 +13,7 @@ from src.utils import (
 )
 from src.vectordb import init_vectordb
 
-VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
+VECTORDB = init_vectordb(recreate=False)
 
 
 def load_model(path: str = "models/drug_target.pkl"):

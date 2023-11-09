@@ -15,7 +15,7 @@ from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
-vectordb = init_vectordb(COLLECTIONS, recreate=False)
+vectordb = init_vectordb(recreate=False)
 
 
 def load_protein_embeddings(path, embedding_layer=33, use_mean=True):

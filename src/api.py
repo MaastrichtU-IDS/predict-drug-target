@@ -80,12 +80,12 @@ app = TRAPI(
 
 @app.post("/reset-vectordb", name="Reset vector database", description="Reset the collections in the vectordb")
 def post_reset_vectordb(api_key: str):
-    init_vectordb(COLLECTIONS, recreate=True, api_key=api_key)
+    init_vectordb(recreate=True, api_key=api_key)
     return {"status": "ok"}
 
 
 @app.post("/train", name="Run training", description="Run training of the model")
 def post_train(api_key: str):
-    # init_vectordb(COLLECTIONS, recreate=True, api_key=api_key)
+    # init_vectordb(recreate=True, api_key=api_key)
     scores = train()
     return scores

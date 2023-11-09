@@ -81,7 +81,7 @@ def prepare(target_directory, output_directory):
                 }
             )
 
-    vectordb = init_vectordb(COLLECTIONS, recreate=False)
+    vectordb = init_vectordb(recreate=False)
 
     df_known_dt = pd.DataFrame(known_drug_targets)
 

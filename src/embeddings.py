@@ -19,7 +19,7 @@ from src.utils import (
 )
 from src.vectordb import VectorDB, init_vectordb
 
-VECTORDB = init_vectordb(COLLECTIONS, recreate=False)
+VECTORDB = init_vectordb(recreate=False)
 
 
 def compute_drug_embedding(

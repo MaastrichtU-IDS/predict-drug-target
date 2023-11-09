@@ -12,7 +12,7 @@ from qdrant_client.http.models import (
     VectorParams,
 )
 
-from src.utils import log
+from src.utils import log, COLLECTIONS
 
 
 # Define an abstract class VectorDB
@@ -87,6 +87,7 @@ class QdrantDB(VectorDB):
                     )
 
     def add(self, collection_name: str, item_list: list[str]) -> UpdateResult:
+        """Add an entity and its vector to the database"""
         batch_size = 1000
         for i in range(0, len(item_list), batch_size):
             item_batch = item_list[i : i + batch_size]
@@ -104,10 +105,10 @@ class QdrantDB(VectorDB):
             )
         return operation_info
 
-    # Get the embeddings for a specific entity ID
     def get(
         self, collection_name: str, search_input: str | None = None, search_field: str = "id", limit: int = 5
     ) -> list[Any]:
+        """Get the vector for a specific entity ID"""
         # if search_input and ":" in search_input:
         #     search_input = search_input.split(":", 1)[1]
         search_result = self.client.scroll(
@@ -121,20 +122,24 @@ class QdrantDB(VectorDB):
         )
         return search_result[0]
 
+
     def search(
         self, collection_name: str, vector: str, search_input: str | None = None, limit: int = 10
     ) -> list[Any] | None:
+        """Search for vectors similar to a given vector"""
         search_result = self.client.search(
             collection_name=collection_name,
             query_vector=vector,
             query_filter=Filter(must=[FieldCondition(key="id", match=MatchText(value=search_input))])
             if search_input
             else None,
+            with_vectors=True,
+            with_payload=True,
             limit=limit,
         )
-        return search_result[0]
+        return search_result
 
 
-def init_vectordb(collections: list[dict[str, str]], recreate: bool = False, api_key: str = "TOCHANGE"):
+def init_vectordb(api_key: str = "TOCHANGE", recreate: bool = False, collections: list[dict[str, str]] = COLLECTIONS):
     qdrant_url = "qdrant.137.120.31.148.nip.io"
     return QdrantDB(collections=collections, recreate=recreate, host=qdrant_url, port=443, api_key=api_key)
