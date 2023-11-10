@@ -149,7 +149,7 @@ def get_sequences_embeddings(sequences: dict[str, str]):
 
     target_dict = {}
     for target_seq, target_id in sequences.items():
-        log.info(f"GENERATING TARGETS EMBEDDINGS FOR {target_id} - {target_seq}")
+        # log.debug(f"GENERATING TARGETS EMBEDDINGS FOR {target_id} - {target_seq}")
         data = [(target_id, target_seq)]
         # data = [ ("protein2", "KALTARQQEVFDLIRDHISQTGMPPTRAEIAQRLGFRSPNAAEEHLKALARKGVIEIVSGASRGIRLLQEE"), ]
         batch_labels, batch_strs, batch_tokens = batch_converter(data)
@@ -200,7 +200,7 @@ def compute_target_embedding(
     # # TODO: also check for duplicate AA seq
     # if target_seq in targets_to_embed:
     #     dup_target.append(target_seq)
-
+    max_target_len = 4000
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -220,11 +220,15 @@ def compute_target_embedding(
                     target_seq, target_label = get_seq_for_target(pref_id[target_id])
                 except:
                     pass
-            if target_seq:
+            if target_seq and len(target_seq) < max_target_len:
+                # NOTE: target embeddings fails if seq too big
                 targets_to_embed[target_seq] = target_id
                 labels_dict[target_id] = target_label
             else:
-                log.debug(f"Could not get the AA sequence for {target_id} | {pref_id[target_id]}")
+                if len(target_seq) > max_target_len:
+                    log.info(f"Target seq too big for {target_id}: {target_seq}")
+                else:
+                    log.debug(f"Could not get the AA sequence for {target_id} | {pref_id[target_id]}")
                 list_targets_no_seq.append(target_id)
 
     if list_targets_no_seq:

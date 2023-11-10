@@ -39,7 +39,7 @@ TIMEOUT = 30
 
 
 def get_smiles_for_drug(drug_id: str):
-    sleep(1) # The APIs are badly built, we cant bulk query, and they fail when too many queries. BAD
+    sleep(1) # We cant bulk query, and they fail when too many queries
     # Not all molecule have smiles https://www.ebi.ac.uk/chembl/api/data/molecule/CHEMBL4297578?format=json
     # CHEMBL.COMPOUND:CHEMBL4297578
     if drug_id.lower().startswith("chembl.compound:"):
@@ -56,20 +56,21 @@ def get_smiles_for_drug(drug_id: str):
 
 
 def get_seq_for_target(target_id: str):
-    sleep(1) # The APIs are badly built, we cant bulk query, and they fail when too many queries. BAD
-    # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
-    if target_id.lower().startswith("ensembl:"):
-        target_id = target_id[len("ensembl:") :]
-        res = requests.get(
-            f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json",
-            timeout=TIMEOUT,
-        ).json()
-        return res[0]["sequence"]["sequence"], res[0]["protein"]["recommendedName"]["fullName"]["value"]
+    sleep(1) # We cant bulk query, and they fail when too many queries
     if target_id.lower().startswith("uniprotkb:"):
         target_id = target_id[len("uniprotkb:") :]
         # https://rest.uniprot.org/uniprotkb/B4E0X6?format=json
         res = requests.get(f"https://rest.uniprot.org/uniprotkb/{target_id}?format=json", timeout=TIMEOUT).json()
         return res["sequence"]["value"], res["proteinDescription"]["recommendedName"]["fullName"]["value"]
+    # https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:ENSP00000351276?offset=0&size=100&format=json
+    # Many possible sequences for 1 Ensembl ID
+    # if target_id.lower().startswith("ensembl:"):
+    #     target_id = target_id[len("ensembl:") :]
+    #     res = requests.get(
+    #         f"https://www.ebi.ac.uk/proteins/api/proteins/Ensembl:{target_id}?offset=0&size=100&format=json",
+    #         timeout=TIMEOUT,
+    #     ).json()
+    #     return res[0]["sequence"]["sequence"], res[0]["protein"]["recommendedName"]["fullName"]["value"]
 
 
 def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):

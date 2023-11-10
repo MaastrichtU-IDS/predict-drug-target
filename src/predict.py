@@ -34,8 +34,8 @@ def load_model(path: str = "models/drug_target.pkl"):
         },
     ],
     nodes={
-        "biolink:Protein": {"id_prefixes": ["UniProtKB", "ENSEMBL"]},
-        "biolink:Drug": {"id_prefixes": ["PUBCHEM.COMPOUND"]},
+        "biolink:Protein": {"id_prefixes": ["UniProtKB"]},
+        "biolink:Drug": {"id_prefixes": ["PUBCHEM.COMPOUND", "CHEMBL.COMPOUND"]},
     },
 )
 def get_drug_target_predictions(request: PredictInput) -> PredictOutput:

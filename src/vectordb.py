@@ -87,7 +87,7 @@ class QdrantDB(VectorDB):
                     )
 
     def add(self, collection_name: str, item_list: list[str]) -> UpdateResult:
-        """Add an entity and its vector to the database"""
+        """Add a list of entities and their vector to the database"""
         batch_size = 1000
         for i in range(0, len(item_list), batch_size):
             item_batch = item_list[i : i + batch_size]

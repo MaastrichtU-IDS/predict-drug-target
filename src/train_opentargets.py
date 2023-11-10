@@ -30,24 +30,51 @@ def extract_data_from_jsonl(filename):
             yield data.get("drugId", None), data.get("targetId", None)
 
 
+
+def ensembl_to_uniprot():
+    """Dict to convert ENSEMBL IDs to UniProt IDs"""
+    json_files = get_jsonl_files("data/download/opentargets/targets")
+    ensembl_to_uniprot_dict = {}
+
+    for json_file in tqdm(json_files, desc="Mapping targets ENSEMBL IDs to UniProt"):
+        with open(json_file) as file:
+            for line in file:
+                data = json.loads(line.strip())
+                for prot in data.get("proteinIds", []):
+                    if prot["source"] == "uniprot_swissprot":
+                        ensembl_to_uniprot_dict[data["id"]] = f"UniProtKB:{prot['id']}"
+
+    return ensembl_to_uniprot_dict
+
+
+
 def train_opentargets(input_dir, out_dir):
     """Main function to orchestrate the extraction and saving process."""
     known_drug_targets = []
+
+    ensembl_to_uniprot_dict = ensembl_to_uniprot()
+    no_match = set()
+    print(len(ensembl_to_uniprot_dict))
 
     # first extract the drug-target pairs from the opentargets json files
     json_files = get_jsonl_files(input_dir)
     for json_file in tqdm(json_files, desc="Processing files"):
         # log.info(json_file)
-        for drugId, targetId in extract_data_from_jsonl(json_file):
-            known_drug_targets.append(
-                {
-                    "drug": f"CHEMBL.COMPOUND:{drugId}",
-                    "target": f"ENSEMBL:{targetId}",
-                }
-            )
+        for drug_id, target_id in extract_data_from_jsonl(json_file):
+            try:
+                known_drug_targets.append(
+                    {
+                        "drug": f"CHEMBL.COMPOUND:{drug_id}",
+                        "target": ensembl_to_uniprot_dict[target_id],
+                    }
+                )
+            except:
+                no_match.add(target_id)
+
+    log.info(f"No UniProt match for {len(no_match)} targets, e.g. {' ,'.join(list(no_match))}")
 
     df_known_dt = pd.DataFrame(known_drug_targets)
-    # print(df_known_dt)
+    print(df_known_dt)
     scores = compute_and_train(df_known_dt, out_dir)
 
 

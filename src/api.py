@@ -16,10 +16,10 @@ trapi_example = {
         "query_graph": {
             "edges": {"e01": {"object": "n1", "predicates": ["biolink:interacts_with"], "subject": "n0"}},
             "nodes": {
-                "n0": {"categories": ["biolink:Drug"], "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039"]},
+                "n0": {"categories": ["biolink:Drug"], "ids": ["PUBCHEM.COMPOUND:5329102", "PUBCHEM.COMPOUND:4039", 'CHEMBL.COMPOUND:CHEMBL1431']},
                 "n1": {
                     "categories": ["biolink:Protein"],
-                    "ids": ["UniProtKB:P12345", "ENSEMBL:ENSP00000351276"],
+                    "ids": ["UniProtKB:O75251"],
                 },
             },
         }

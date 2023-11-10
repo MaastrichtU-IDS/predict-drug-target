@@ -255,7 +255,7 @@ def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
 
     # Remove from df_known_dt entries where we don't have SMILES or AA seq
     known_dt_before = len(df_known_dt)
-    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_drugs[["target"]], on="target")
+    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_targets[["target"]], on="target")
     log.info(
         f"Number of known interactions before and after removing rows for which we don't have smiles/sequence: {known_dt_before} > {len(df_known_dt)}"
     )
@@ -263,4 +263,4 @@ def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
 
     # Run the training
     log.info("Start training")
-    return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/drug_target.pkl")
+    return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target.pkl")
