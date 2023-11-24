@@ -1,0 +1,19 @@
+{
+    "metadata": {
+        "subjects": 3215,
+        "objects": 1484,
+        "known_pairs": 8750,
+        "true_positives": 8750,
+        "true_negatives": 3699955,
+        "features_count": 1792
+    },
+    "scores": {
+        "fold": 4.5,
+        "precision": 0.8769812047996672,
+        "recall": 0.8739428571428571,
+        "accuracy": 0.8756571428571429,
+        "roc_auc": 0.9417664653061225,
+        "f1": 0.8754224952048693,
+        "average_precision": 0.9484004747416057
+    }
+}

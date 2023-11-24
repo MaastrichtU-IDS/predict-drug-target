@@ -43,6 +43,8 @@ dependencies = [
     "qdrant-client",
     "PubChemPy",
     "typer",
+    # NOTE: bug in 1.6.1
+    "linkml-runtime ==1.6.0"
 ]
 
 [project.optional-dependencies]
