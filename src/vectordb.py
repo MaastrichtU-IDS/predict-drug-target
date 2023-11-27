@@ -10,6 +10,7 @@ from qdrant_client.http.models import (
     PointStruct,
     UpdateResult,
     VectorParams,
+    SearchParams,
 )
 
 from src.utils import log, COLLECTIONS
@@ -37,6 +38,7 @@ class VectorDB(ABC):
 
 
 # https://qdrant.tech/documentation/quick-start
+# More config: https://qdrant.tech/documentation/concepts/collections/#create-a-collection
 class QdrantDB(VectorDB):
     def __init__(
         self,
@@ -56,7 +58,7 @@ class QdrantDB(VectorDB):
             for collection in collections:
                 self.client.recreate_collection(
                     collection_name=collection["name"],
-                    vectors_config=VectorParams(size=collection["size"], distance=Distance.DOT),
+                    vectors_config=VectorParams(size=collection["size"], distance=Distance.COSINE),
                 )
                 self.client.create_payload_index(collection["name"], "id", "keyword")
         else:
@@ -71,7 +73,7 @@ class QdrantDB(VectorDB):
                 for collection in collections:
                     self.client.recreate_collection(
                         collection_name=collection["name"],
-                        vectors_config=VectorParams(size=collection["size"], distance=Distance.DOT),
+                        vectors_config=VectorParams(size=collection["size"], distance=Distance.COSINE),
                         # Qdrant supports Dot, Cosine and Euclid
                     )
                     self.client.create_payload_index(
@@ -133,10 +135,12 @@ class QdrantDB(VectorDB):
             query_filter=Filter(must=[FieldCondition(key="id", match=MatchText(value=search_input))])
             if search_input
             else None,
+            # search_params=SearchParams(hnsw_ef=128, exact=False),
             with_vectors=True,
             with_payload=True,
             limit=limit,
         )
+        # "strategy": "best_score"
         return search_result
 
 

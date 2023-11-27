@@ -8,7 +8,6 @@ from tqdm import tqdm
 from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.train import train, compute_and_train
 from src.utils import COLLECTIONS, log
-from src.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
 # ./scripts/download_opentargets.sh
