@@ -20,6 +20,7 @@ from src.vectordb import VectorDB, init_vectordb
 
 VECTORDB = init_vectordb(recreate=False)
 
+MAX_TARGET_LEN = 3000
 
 def compute_drug_embedding(
     vectordb: VectorDB, drugs: list[str] | None = None, tmp_dir: str | None = None, length: int = EMBEDDINGS_SIZE_DRUG
@@ -200,7 +201,6 @@ def compute_target_embedding(
     # # TODO: also check for duplicate AA seq
     # if target_seq in targets_to_embed:
     #     dup_target.append(target_seq)
-    max_target_len = 4000
     for target_id in tqdm(targets, desc="Check targets in vector db, or get their AA seq"):
         # Check if we can find it in the vectordb
         from_vectordb = vectordb.get("target", target_id)
@@ -220,12 +220,12 @@ def compute_target_embedding(
                     target_seq, target_label = get_seq_for_target(pref_id[target_id])
                 except:
                     pass
-            if target_seq and len(target_seq) < max_target_len:
+            if target_seq and len(target_seq) < MAX_TARGET_LEN:
                 # NOTE: target embeddings fails if seq too big
                 targets_to_embed[target_seq] = target_id
                 labels_dict[target_id] = target_label
             else:
-                if len(target_seq) > max_target_len:
+                if len(target_seq) > MAX_TARGET_LEN:
                     log.info(f"Target seq too big for {target_id}: {target_seq}")
                 else:
                     log.debug(f"Could not get the AA sequence for {target_id} | {pref_id[target_id]}")
