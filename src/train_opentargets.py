@@ -8,6 +8,7 @@ from tqdm import tqdm
 from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.train import train, compute_and_train
 from src.utils import COLLECTIONS, log
+from src.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
 # ./scripts/download_opentargets.sh
@@ -49,6 +50,7 @@ def ensembl_to_uniprot():
 
 def train_opentargets(input_dir, out_dir):
     """Main function to orchestrate the extraction and saving process."""
+    os.makedirs(out_dir, exist_ok=True)
     known_drug_targets = []
 
     ensembl_to_uniprot_dict = ensembl_to_uniprot()
@@ -79,7 +81,4 @@ def train_opentargets(input_dir, out_dir):
 
 
 if __name__ == "__main__":
-    target_directory = "data/download/opentargets/knownDrugsAggregated"
-    output_directory = "data/opentargets"  # Replace with desired output CSV file name/path
-    os.makedirs(output_directory, exist_ok=True)
-    train_opentargets(target_directory, output_directory)
+    train_opentargets("data/download/opentargets/knownDrugsAggregated", "data/opentargets")
