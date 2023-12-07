@@ -12,7 +12,7 @@ from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.utils import COLLECTIONS, log
+from src.utils import log
 from src.vectordb import init_vectordb
 
 vectordb = init_vectordb(recreate=False)
