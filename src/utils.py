@@ -97,7 +97,7 @@ def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
     resp = resolve_curies.json()
     # print(resp)
     for original_id, available_ids in resp.items():
-        pref_id = None
+        pref_id = original_id
         try:
             if not accepted_namespaces:
                 pref_id = available_ids["id"]["identifier"]
@@ -105,7 +105,7 @@ def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
                 for ns in accepted_namespaces:
                     if available_ids["id"]["identifier"].lower().startswith(ns.lower()):
                         pref_id = available_ids["id"]["identifier"]
-                if not pref_id:
+                if pref_id == original_id:
                     for alt_id in available_ids["equivalent_identifiers"]:
                         for ns in accepted_namespaces:
                             if alt_id["identifier"].lower().startswith(ns.lower()):
@@ -113,6 +113,6 @@ def get_pref_ids(ids_list: list, accepted_namespaces: list[str] = None):
             # log.debug(f"{original_id} > {pref_id}")
         except Exception:
             log.debug(f"Could not find pref ID for {original_id} in {available_ids}")
-            pref_id = original_id
+            # pref_id = original_id
         pref_ids[original_id] = pref_id
     return pref_ids

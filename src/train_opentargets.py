@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.train import train, compute_and_train
-from src.utils import COLLECTIONS, log
+from src.utils import COLLECTIONS, log, get_pref_ids
 from src.vectordb import init_vectordb
 
 # NOTE: script to run the WHOLE pipeline on opentargets data
@@ -81,5 +81,17 @@ def train_opentargets(input_dir, out_dir):
     scores = compute_and_train(df_known_dt, out_dir)
 
 
+def train_drugbank():
+    df_known_dt = "data/drugbank/DB_DTI_4vectordb.csv"
+    out_dir = "data/drugbank"
+
+    df = pd.read_csv(df_known_dt)
+    convert_dict = get_pref_ids(df["drug"].values, ["PUBCHEM.COMPOUND"])
+    print(convert_dict)
+    df["drug"] = df["drug"].apply(lambda curie: convert_dict[curie])
+    print(df)
+    scores = compute_and_train(df, out_dir)
+
 if __name__ == "__main__":
-    train_opentargets("data/download/opentargets/knownDrugsAggregated", "data/opentargets")
+    train_drugbank()
+    # train_opentargets("data/download/opentargets/knownDrugsAggregated", "data/opentargets")
