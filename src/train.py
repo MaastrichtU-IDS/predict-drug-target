@@ -10,6 +10,7 @@ import pandas as pd
 import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold
+from xgboost import XGBClassifier
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import log
@@ -195,18 +196,31 @@ def train(
     # nb_model = GaussianNB()
     # lr_model = linear_model.LogisticRegression()
     # rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
-    rf_model = ensemble.RandomForestClassifier(
+    # rf_model = ensemble.RandomForestClassifier(
+    #     n_estimators=200,
+    #     criterion="log_loss",
+    #     max_depth=None,
+    #     min_samples_split=2,
+    #     min_samples_leaf=1,
+    #     max_features="sqrt",
+    #     n_jobs=-1,
+    # )
+    xgb_model = XGBClassifier(
         n_estimators=200,
-        criterion="log_loss",
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        max_features="sqrt",
+        max_depth=6,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        gamma=0,
+        reg_alpha=0,
+        reg_lambda=1,
+        objective='binary:logistic',  # For binary classification
         n_jobs=-1,
+        random_state=42,
     )
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-    clfs = [("Random Forest", rf_model)]
+    clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
 
     n_seed = 100
     n_fold = 10
@@ -224,7 +238,7 @@ def train(
 
     os.makedirs("models", exist_ok=True)
     with open(save_model, "wb") as f:
-        pickle.dump(rf_model, f)
+        pickle.dump(xgb_model, f) #rf_model
 
     return agg_df.to_dict(orient="records")
 
