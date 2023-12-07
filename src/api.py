@@ -88,4 +88,6 @@ def post_reset_vectordb(api_key: str):
 def post_train(api_key: str):
     # init_vectordb(recreate=True, api_key=api_key)
     scores = train()
+    # return scores_df.to_dict(orient="records")
+
     return scores

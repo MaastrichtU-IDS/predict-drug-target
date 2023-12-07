@@ -1,12 +1,14 @@
-import glob
-import json
 import os
-
 import pandas as pd
 
 from src.train import train
-from src.utils import COLLECTIONS, log
+from src.utils import log, TrainingConfig
 from src.vectordb import init_vectordb
+
+
+# NOTE: script to test various config while training the model
+# For speed, it DOES NOT compute embeddings for all drugs and targets
+# It expects the embeddings to be already generated in a CSV (by train_opentargets.py)
 
 
 def drop_similar(df: str, col_id: str, threshold: float = 0.9):
@@ -41,8 +43,40 @@ def drop_similar(df: str, col_id: str, threshold: float = 0.9):
 
 
 
+def train_many_configs(input_dir, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    configs = [
+        TrainingConfig(
+            subject_sim_threshold=1,
+            object_sim_threshold=1,
+            cv_nfold=10,
+            max_depth=6,
+        ),
+        TrainingConfig(
+            subject_sim_threshold=1,
+            object_sim_threshold=0.98,
+            cv_nfold=10,
+            max_depth=6,
+        ),
+        # TrainingConfig(
+        #     subject_sim_threshold=1,
+        #     object_sim_threshold=0.95,
+        #     cv_nfold=10,
+        #     max_depth=6,
+        # ),
+    ]
+    score_list = []
+    for config in configs:
+        score_list.append(train_not_similar(input_dir, out_dir, config))
 
-def train_not_similar(input_dir, out_dir):
+    print(score_list)
+
+    combined_df = pd.concat(score_list)
+
+    combined_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
+
+
+def train_not_similar(input_dir, out_dir, config: TrainingConfig):
     os.makedirs(out_dir, exist_ok=True)
 
     df_known_dt = pd.read_csv(f"{input_dir}/known_drugs_targets.csv")
@@ -52,15 +86,22 @@ def train_not_similar(input_dir, out_dir):
 
     log.info(f"DF LENGTH BEFORE DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    df_drugs = drop_similar(df_drugs, "drug", 0.9)
-    df_targets = drop_similar(df_targets, "target", 0.98)
+    df_drugs = drop_similar(df_drugs, "drug", config.subject_sim_threshold)
+    df_targets = drop_similar(df_targets, "target", config.object_sim_threshold)
 
     df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_targets[["target"]], on="target")
 
     log.info(f"DF LENGTH AFTER DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target_nosim.pkl")
+    score_df = train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target_nosim.pkl", config=config)
+    score_df.insert(0, 'Drug sim threshold', config.subject_sim_threshold)
+    score_df.insert(1, 'Target sim threshold', config.object_sim_threshold)
+    score_df.insert(2, 'CV nfold', config.cv_nfold)
+    score_df.insert(3, 'Max depth', config.max_depth)
+
+    return score_df
 
 
 if __name__ == "__main__":
-    train_not_similar("data/opentargets", "data/opentargets_not_similar")
+    train_many_configs("data/opentargets", "data/results")
+    # train_not_similar("data/opentargets", "data/opentargets_not_similar")

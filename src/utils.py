@@ -1,5 +1,6 @@
 import logging
 from time import sleep
+from dataclasses import dataclass
 
 import pubchempy as pcp
 import requests
@@ -36,6 +37,14 @@ YELLOW = "\033[33m"
 CYAN = "\033[36m"
 
 TIMEOUT = 30
+
+@dataclass
+class TrainingConfig:
+    subject_sim_threshold: int = 1 # 0 to 1
+    object_sim_threshold: int = 1
+    cv_nfold: int = 10
+    max_depth: int = 6
+
 
 
 def get_smiles_for_drug(drug_id: str):

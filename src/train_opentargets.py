@@ -10,8 +10,9 @@ from src.train import train, compute_and_train
 from src.utils import COLLECTIONS, log
 from src.vectordb import init_vectordb
 
-# NOTE: Download opentargets before running this script
-# ./scripts/download_opentargets.sh
+# NOTE: script to run the WHOLE pipeline on opentargets data
+# it will automatically compute embeddings for all drugs and targets
+# Download opentargets before running this script: ./scripts/download_opentargets.sh
 
 # Output file path
 output_file_path = "../data/opentargets/merged_parsed.csv"
@@ -76,8 +77,8 @@ def train_opentargets(input_dir, out_dir):
 
     df_known_dt = pd.DataFrame(known_drug_targets)
     print(df_known_dt)
+    # TODO: add TrainingConfig
     scores = compute_and_train(df_known_dt, out_dir)
-
 
 
 if __name__ == "__main__":

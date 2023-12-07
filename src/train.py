@@ -13,7 +13,7 @@ from sklearn.model_selection import StratifiedKFold
 from xgboost import XGBClassifier
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.utils import log
+from src.utils import log, TrainingConfig
 from src.vectordb import init_vectordb
 
 vectordb = init_vectordb(recreate=False)
@@ -170,12 +170,16 @@ def train(
     df_drugs_embeddings: pd.DataFrame,
     df_targets_embeddings: pd.DataFrame,
     save_model: str = "models/drug_target.pkl",
+    config: TrainingConfig | None = None
 ):
     """Training takes 3 dataframes as input, ideally use CURIEs for drug/target IDs:
     1. a df with known drug-target interactions (2 cols: drug, target)
     2. a df with drug embeddings: drug col + 512 cols for embeddings
     3. a df with target embeddings: target col + 1280 cols for embeddings
     """
+    if not config:
+        config = TrainingConfig()
+
     embeddings = {
         "drug": df_drugs_embeddings,
         "target": df_targets_embeddings,
@@ -199,7 +203,7 @@ def train(
     # rf_model = ensemble.RandomForestClassifier(
     #     n_estimators=200,
     #     criterion="log_loss",
-    #     max_depth=None,
+    #     max_depth=config.max_depth,
     #     min_samples_split=2,
     #     min_samples_leaf=1,
     #     max_features="sqrt",
@@ -207,7 +211,7 @@ def train(
     # )
     xgb_model = XGBClassifier(
         n_estimators=200,
-        max_depth=6,
+        max_depth=config.max_depth,
         learning_rate=0.1,
         subsample=0.8,
         colsample_bytree=0.8,
@@ -223,7 +227,7 @@ def train(
     clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
 
     n_seed = 100
-    n_fold = 10
+    n_fold = config.cv_nfold
     n_run = 2
     n_proportion = 1
 
@@ -240,7 +244,8 @@ def train(
     with open(save_model, "wb") as f:
         pickle.dump(xgb_model, f) #rf_model
 
-    return agg_df.to_dict(orient="records")
+    return agg_df
+    # return agg_df.to_dict(orient="records")
 
 
 def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):

@@ -37,6 +37,7 @@ dependencies = [
     "torch",
     "matplotlib",
     "scikit-learn",
+    "xgboost",
     "ipykernel",
     "numpy",
     "requests",
