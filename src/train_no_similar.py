@@ -45,26 +45,23 @@ def drop_similar(df: str, col_id: str, threshold: float = 0.9):
 
 def train_many_configs(input_dir, out_dir):
     os.makedirs(out_dir, exist_ok=True)
-    configs = [
-        TrainingConfig(
-            subject_sim_threshold=1,
-            object_sim_threshold=1,
-            cv_nfold=10,
-            max_depth=6,
-        ),
-        TrainingConfig(
-            subject_sim_threshold=1,
-            object_sim_threshold=0.98,
-            cv_nfold=10,
-            max_depth=6,
-        ),
-        # TrainingConfig(
-        #     subject_sim_threshold=1,
-        #     object_sim_threshold=0.95,
-        #     cv_nfold=10,
-        #     max_depth=6,
-        # ),
-    ]
+    subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+    object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+    cv_nfolds = [10, 20]
+    max_depths = [6, -1]
+
+    configs = []
+    for subject_sim_threshold in subject_sim_thresholds:
+        for object_sim_threshold in object_sim_thresholds:
+            for cv_nfold in cv_nfolds:
+                for max_depth in max_depths:
+                    configs.append(TrainingConfig(
+                        subject_sim_threshold=subject_sim_threshold,
+                        object_sim_threshold=object_sim_threshold,
+                        cv_nfold=cv_nfold,
+                        max_depth=max_depth,
+                    ))
+
     score_list = []
     for config in configs:
         score_list.append(train_not_similar(input_dir, out_dir, config))
@@ -78,6 +75,8 @@ def train_many_configs(input_dir, out_dir):
 
 def train_not_similar(input_dir, out_dir, config: TrainingConfig):
     os.makedirs(out_dir, exist_ok=True)
+
+    print(f"🔨 Training for {config}")
 
     df_known_dt = pd.read_csv(f"{input_dir}/known_drugs_targets.csv")
 
