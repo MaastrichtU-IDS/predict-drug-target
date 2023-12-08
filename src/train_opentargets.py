@@ -50,7 +50,7 @@ def ensembl_to_uniprot():
 
 
 def train_opentargets(input_dir, out_dir):
-    """Main function to orchestrate the extraction and saving process."""
+    """Train the model using opentargets data."""
     os.makedirs(out_dir, exist_ok=True)
     known_drug_targets = []
 
@@ -82,6 +82,7 @@ def train_opentargets(input_dir, out_dir):
 
 
 def train_drugbank():
+    """Train the model using drugbank data."""
     df_known_dt = "data/drugbank/DB_DTI_4vectordb.csv"
     out_dir = "data/drugbank"
 
