@@ -225,7 +225,7 @@ def compute_target_embedding(
                 targets_to_embed[target_seq] = target_id
                 labels_dict[target_id] = target_label
             else:
-                if len(target_seq) > MAX_TARGET_LEN:
+                if target_seq and len(target_seq) > MAX_TARGET_LEN:
                     log.info(f"Target seq too big for {target_id}: {target_seq}")
                 else:
                     log.debug(f"Could not get the AA sequence for {target_id} | {pref_id[target_id]}")
