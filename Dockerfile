@@ -4,7 +4,9 @@ FROM ${BASE_IMAGE}
 
 ARG DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Amsterdam \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    JOBLIB_TEMP_FOLDER=/app/data/tmp
+    # ^fixes no space left on device error
 
 WORKDIR /app
 
