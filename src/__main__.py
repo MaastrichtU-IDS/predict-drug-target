@@ -1,6 +1,6 @@
 import typer
 
-from src.train import compute_and_train
+from src.train import compute
 
 cli = typer.Typer()
 
@@ -19,7 +19,8 @@ def train(
     Examples:
       $ predict-dt train known_drug_target.csv -o data/my_model
     """
-    scores = compute_and_train(known_drug_target, output)
+    df_known_dt, df_drugs, df_targets = compute(known_drug_target, output)
+    scores = train(df_known_dt, df_drugs, df_targets, f"{output}/model.pkl")
     typer.echo(f"Training done: {scores}")
 
 

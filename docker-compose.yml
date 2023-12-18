@@ -6,9 +6,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./:/app
-      # - ./data:/app/data
-      # - ./models:/app/models
-      # - ./MolecularTransformerEmbeddings:/app/MolecularTransformerEmbeddings
+      - /mnt/um-share-drive/deep-purpose:/app/data/shared
     environment:
       - VIRTUAL_HOST=predict-drug-target.137.120.31.160.nip.io
       - LETSENCRYPT_HOST=predict-drug-target.137.120.31.160.nip.io

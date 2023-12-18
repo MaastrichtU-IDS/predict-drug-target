@@ -1,15 +1,16 @@
+"""Common functions for training the models"""
 import numbers
 import os
 import pickle
 import random
 import concurrent.futures
-from datetime import date
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
 import torch
 from sklearn import ensemble, metrics
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split, KFold
 from xgboost import XGBClassifier
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
@@ -20,6 +21,8 @@ vectordb = init_vectordb(recreate=False)
 
 
 def generate_dt_pairs(dt_df):
+    """Get pairs and their labels: All given known drug-target pairs are 1,
+    We add pairs for missing drug/targets combinations as 0 (not known as interacting)"""
     dtKnown = {tuple(x) for x in dt_df[["drug", "target"]].values}
     pairs = []
     labels = []
@@ -93,6 +96,10 @@ def crossvalid(train_df, test_df, clfs, run_index, fold_index):
 
     X_new = test_df[features_cols].values
     y_new = test_df["Class"].values.ravel()
+
+    print("FIT X Y")
+    print(X)
+    print(y)
 
     results = pd.DataFrame()
     for name, clf in clfs:
@@ -221,7 +228,8 @@ def train(
         objective='binary:logistic',  # For binary classification
         n_jobs=-1,
         random_state=42,
-        tree_method='gpu_hist', # Use GPU optimized histogram algorithm
+        tree_method='hist', # Use GPU optimized histogram algorithm
+        # device='gpu',
     )
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
@@ -249,7 +257,7 @@ def train(
     # return agg_df.to_dict(orient="records")
 
 
-def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
+def compute(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
     """Compute embeddings and train model to predict interactions for a dataframe with 2 cols: drug, target"""
     if isinstance(df_known_dt, str):
         df_known_dt = pd.read_csv(df_known_dt)
@@ -283,4 +291,131 @@ def compute_and_train(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
 
     # Run the training
     log.info("Start training")
-    return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target.pkl")
+    # return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target.pkl")
+    return df_known_dt, df_drugs, df_targets
+
+
+################### Train with a grid of hyperparameters to find the best
+
+def train_grid(
+    df_known_interactions: pd.DataFrame,
+    df_drugs_embeddings: pd.DataFrame,
+    df_targets_embeddings: pd.DataFrame,
+    params_grid: dict[str, int | float],
+    save_model: str = "models/drug_target.pkl",
+):
+    """Train and compare a grid of hyperparameters
+
+    Training takes 3 dataframes as input, ideally use CURIEs for drug/target IDs:
+    1. a df with known drug-target interactions (2 cols: drug, target)
+    2. a df with drug embeddings: drug col + 512 cols for embeddings
+    3. a df with target embeddings: target col + 1280 cols for embeddings
+    """
+    time_start = datetime.now()
+    embeddings = {
+        "drug": df_drugs_embeddings,
+        "target": df_targets_embeddings,
+    }
+
+    # Get pairs and their labels: All given known drug-target pairs are 1
+    # we add pairs for missing drug/targets combinations as 0 (not known as interacting)
+    pairs, labels = generate_dt_pairs(df_known_interactions)
+
+    # TODO: Split dataset for train/test?
+    # X_train, X_test, y_train, y_test = train_test_split(pairs, labels, test_size=0.2, random_state=123)
+
+    # Merge drug/target pairs and their labels in a DF
+    train_df = pd.DataFrame(
+        list(zip(pairs[:, 0], pairs[:, 1], labels)), columns=["drug", "target", "Class"]
+    )
+    # Add the embeddings to the DF
+    train_df = train_df.merge(embeddings["drug"], left_on="drug", right_on="drug").merge(
+        embeddings["target"], left_on="target", right_on="target"
+    )
+
+    # X is the array of embeddings (drug+target), without other columns
+    # y is the array of classes/labels (0 or 1)
+    embedding_cols = train_df.columns.difference(["drug", "target", "Class"])
+    X = train_df[embedding_cols].values
+    y = train_df["Class"].values.ravel()
+    print(f"Features count: {len(embedding_cols)}")
+    print(X)
+    print(y)
+
+    ndrugs = len(embeddings["drug"])
+    ntargets = len(embeddings["target"])
+    _unique, counts = np.unique(labels, return_counts=True)
+    ndrugtargets = counts[1]
+    log.info(f"Training based on {ndrugtargets} Drug-Targets known interactions: {ndrugs} drugs | {ntargets} targets")
+    random_state=123 # Or 42?
+    n_jobs = 2 # Or -1
+
+    xgb_model = XGBClassifier(
+        objective='binary:logistic',
+        n_jobs=-1,
+        random_state=random_state,
+        tree_method='hist', # Use GPU optimized histogram algorithm
+        device='cuda',
+    )
+
+    # Create a KFold object for cross-validation
+    kf = KFold(n_splits=5, shuffle=True, random_state=random_state)
+    grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='f1', cv=kf, n_jobs=n_jobs)
+    # or scoring='accuracy'
+
+    log.info("Fitting grid search")
+    grid_search.fit(X, y)
+
+    # Without CV:temp_folder
+    # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='accuracy', cv=5, n_jobs=n_jobs)
+
+    # Perform grid search on the training data
+    # grid_search.fit(X_train, y_train)
+
+    # Print the best parameters and the corresponding accuracy
+    log.info("Best Parameters:", grid_search.best_params_)
+    log.info("Best Accuracy:", grid_search.best_score_)
+
+    # Creating DataFrame from cv_results
+    results_df = pd.DataFrame(grid_search.cv_results_)
+    results_df = results_df[['params', 'mean_test_score', 'std_test_score', 'rank_test_score']]
+
+    # Evaluate on test data
+    best_model = grid_search.best_estimator_
+
+    # test_accuracy = best_model.score(X_test, y_test)
+    # log.info("Test Accuracy:", test_accuracy)
+
+    log.info(f"⚡ Training took {datetime.now() - time_start}")
+
+    # TODO: return a df with aggregated scores for each grid combination?
+
+
+    # # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
+    # clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
+
+    # n_seed = 100
+    # n_fold = params_grid.cv_nfold
+    # n_run = 2
+    # n_proportion = 1
+
+    # results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
+    # agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
+
+    # # Run training
+    # all_scores_df = kfold_cv(pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
+    # all_scores_df.to_csv(results_file, sep=",", index=False)
+
+    # agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
+    # agg_df.to_csv(agg_results_file, sep=",", index=False)
+    # log.info("Aggregated results:")
+    # print(agg_df)
+
+
+    os.makedirs("models", exist_ok=True)
+    with open(save_model, "wb") as f:
+        pickle.dump(best_model, f) #rf_model
+
+    return results_df
+    # return agg_df.to_dict(orient="records")
+
