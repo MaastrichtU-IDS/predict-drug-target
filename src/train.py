@@ -5,13 +5,15 @@ import pickle
 import random
 import concurrent.futures
 from datetime import date, datetime
+from itertools import product
 
 import numpy as np
 import pandas as pd
 import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split, KFold
-from xgboost import XGBClassifier
+import xgboost as xgb
+from xgboost import XGBClassifier, DMatrix
 
 from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import log, TrainingConfig
@@ -297,6 +299,12 @@ def compute(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
 
 ################### Train with a grid of hyperparameters to find the best
 
+
+def get_params_combinations(params):
+	keys, values = zip(*params.items())
+	combinations = [dict(zip(keys, v)) for v in product(*values)]
+	return combinations
+
 def train_grid(
     df_known_interactions: pd.DataFrame,
     df_drugs_embeddings: pd.DataFrame,
@@ -350,38 +358,69 @@ def train_grid(
     random_state=123 # Or 42?
     n_jobs = 2 # Or -1
 
-    xgb_model = XGBClassifier(
-        objective='binary:logistic',
-        n_jobs=-1,
-        random_state=random_state,
-        tree_method='hist', # Use GPU optimized histogram algorithm
-        device='cuda',
-    )
+    # xgb_model = XGBClassifier(
+    #     objective='binary:logistic',
+    #     n_jobs=-1,
+    #     random_state=random_state,
+    #     tree_method='hist', # Use GPU optimized histogram algorithm
+    #     device='cuda',
+    # )
+    # TODO: xgboost don't support gridsearch on GPU by default
+    # https://github.com/compomics/ms2pip/blob/a8c61b41044f3f756b4551d7866d8030e68b1570/train_scripts/train_xgboost_c.py#L143
 
-    # Create a KFold object for cross-validation
-    kf = KFold(n_splits=5, shuffle=True, random_state=random_state)
-    grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='f1', cv=kf, n_jobs=n_jobs)
-    # or scoring='accuracy'
+    # Load to DMatrix for XGBoost on GPU
+    dtrain = DMatrix(X, label=y)
 
-    log.info("Fitting grid search")
-    grid_search.fit(X, y)
+    cols = ['boosting-round', 'test-rmse-mean', 'test-rmse-std', 'train-rmse-mean', 'train-rmse-std']
+    cols.extend(sorted(params_grid.keys()))
+    result = pd.DataFrame(columns=cols)
 
-    # Without CV:temp_folder
-    # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='accuracy', cv=5, n_jobs=n_jobs)
+    count = 1
+    combinations = get_params_combinations(params_grid)
 
-    # Perform grid search on the training data
-    # grid_search.fit(X_train, y_train)
+    for param_combin in combinations:
+        # param_combin["n_jobs"] = n_jobs
+        # param_combin["random_state"] = random_state
+        # param_combin["tree_method"] = "gpu_hist"
+        param_combin["device"] = "cuda"
+        param_combin["tree_method"] = "hist"
 
-    # Print the best parameters and the corresponding accuracy
-    log.info("Best Parameters:", grid_search.best_params_)
-    log.info("Best Accuracy:", grid_search.best_score_)
+        print("Working on combination {}/{}".format(count, len(combinations)))
+        count += 1
+        # params.update(param_overrides)
+        tmp = xgb.cv(param_combin, dtrain, nfold=5, num_boost_round=100, early_stopping_rounds=10, verbose_eval=10)
+        tmp['boosting-round'] = tmp.index
+        for param in param_combin.keys():
+            tmp[param] = param_combin[param]
+        result = result.append(tmp)
+    print("result!", result)
 
-    # Creating DataFrame from cv_results
-    results_df = pd.DataFrame(grid_search.cv_results_)
-    results_df = results_df[['params', 'mean_test_score', 'std_test_score', 'rank_test_score']]
 
-    # Evaluate on test data
-    best_model = grid_search.best_estimator_
+    # # Create a KFold object for cross-validation
+    # kf = KFold(n_splits=5, shuffle=True, random_state=random_state)
+    # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='f1', cv=kf, n_jobs=n_jobs)
+    # # or scoring='accuracy'
+
+    # log.info("Fitting grid search")
+    # grid_search.fit(X, y)
+    # grid_search
+
+    # # Without CV:temp_folder
+    # # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='accuracy', cv=5, n_jobs=n_jobs)
+
+    # # Perform grid search on the training data
+    # # grid_search.fit(X_train, y_train)
+
+    # # Print the best parameters and the corresponding accuracy
+    # log.info("Best Parameters:", grid_search.best_params_)
+    # log.info("Best Accuracy:", grid_search.best_score_)
+
+    # # Creating DataFrame from cv_results
+    # results_df = pd.DataFrame(grid_search.cv_results_)
+    # results_df = results_df[['params', 'mean_test_score', 'std_test_score', 'rank_test_score']]
+
+    # # Evaluate on test data
+    # best_model = grid_search.best_estimator_
 
     # test_accuracy = best_model.score(X_test, y_test)
     # log.info("Test Accuracy:", test_accuracy)

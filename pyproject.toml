@@ -106,8 +106,8 @@ cov = [
 requirements = "pip-compile -o requirements.txt pyproject.toml"
 
 # TOOLS
-#[tool.hatch.build]
-#sources = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
