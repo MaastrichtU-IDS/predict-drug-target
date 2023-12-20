@@ -49,8 +49,10 @@ dependencies = [
 
     "opentelemetry-sdk",
     "opentelemetry-exporter-otlp-proto-http",
+    "opentelemetry-exporter-jaeger",
     "opentelemetry-instrumentation-fastapi",
     "opentelemetry-instrumentation-httpx",
+    "opentelemetry-instrumentation-requests",
 ]
 
 [project.optional-dependencies]
