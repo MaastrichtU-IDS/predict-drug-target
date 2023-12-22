@@ -91,7 +91,7 @@ def train_grid_exclude_sim(input_dir, out_dir):
         'gamma': [0, 1],
         'reg_alpha': [0, 0.1],
         'reg_lambda': [1, 2],
-        'n_estimators': [100, 200],
+        # 'n_estimators': [100, 200],
     }
 
     # Longer version
@@ -111,12 +111,10 @@ def train_grid_exclude_sim(input_dir, out_dir):
     scores_df = pd.DataFrame()
     for subject_sim_threshold in subject_sim_thresholds:
         for object_sim_threshold in object_sim_thresholds:
-            score = exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold, object_sim_threshold)
-            scores_df = scores_df.append({
-                'subject_sim_threshold': subject_sim_threshold,
-                'object_sim_threshold': object_sim_threshold,
-                'score': score,
-            })
+            sim_scores = exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold, object_sim_threshold)
+            sim_scores["subject_sim_threshold"] = subject_sim_threshold
+            sim_scores["object_sim_threshold"] = object_sim_threshold
+            scores_df = pd.concat([scores_df, sim_scores], ignore_index=True)
 
     # score_list = []
     # for config in configs:

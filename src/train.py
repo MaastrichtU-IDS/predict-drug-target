@@ -2,6 +2,7 @@
 import numbers
 import os
 import pickle
+import time
 import random
 import concurrent.futures
 from datetime import date, datetime
@@ -357,44 +358,96 @@ def train_grid(
     log.info(f"Training based on {ndrugtargets} Drug-Targets known interactions: {ndrugs} drugs | {ntargets} targets")
     random_state=123 # Or 42?
     n_jobs = 2 # Or -1
+    n_splits = 5
 
-    # xgb_model = XGBClassifier(
-    #     objective='binary:logistic',
-    #     n_jobs=-1,
-    #     random_state=random_state,
-    #     tree_method='hist', # Use GPU optimized histogram algorithm
-    #     device='cuda',
-    # )
+    # pairs, classes = balance_data(pairs_all, classes_all, n_proportion)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+
     # TODO: xgboost don't support gridsearch on GPU by default
     # https://github.com/compomics/ms2pip/blob/a8c61b41044f3f756b4551d7866d8030e68b1570/train_scripts/train_xgboost_c.py#L143
 
-    # Load to DMatrix for XGBoost on GPU
-    dtrain = DMatrix(X, label=y)
-
-    cols = ['boosting-round', 'test-rmse-mean', 'test-rmse-std', 'train-rmse-mean', 'train-rmse-std']
-    cols.extend(sorted(params_grid.keys()))
-    result = pd.DataFrame(columns=cols)
-
+    results = []
     count = 1
     combinations = get_params_combinations(params_grid)
 
+    # NOTE: Trying to use train to run CV on GPU
     for param_combin in combinations:
-        # param_combin["n_jobs"] = n_jobs
-        # param_combin["random_state"] = random_state
-        # param_combin["tree_method"] = "gpu_hist"
-        param_combin["device"] = "cuda"
+        param_combin["device"] = "cuda:2"
         param_combin["tree_method"] = "hist"
+        # param_combin["eval_metric"] = "rmse"  # Evaluation metric
 
         print("Working on combination {}/{}".format(count, len(combinations)))
-        count += 1
-        # params.update(param_overrides)
-        tmp = xgb.cv(param_combin, dtrain, nfold=5, num_boost_round=100, early_stopping_rounds=10, verbose_eval=10)
-        tmp['boosting-round'] = tmp.index
-        for param in param_combin.keys():
-            tmp[param] = param_combin[param]
-        result = result.append(tmp)
-    print("result!", result)
+        combination_time = time.time()
+        fold_results = []
 
+        # for fold, (train_index, test_index) in enumerate(kf.split(X)):
+        # Train model for each fold
+        for fold, (train_index, test_index) in enumerate(skf.split(X, y)):
+            X_train, X_test = X[train_index], X[test_index]
+            y_train, y_test = y[train_index], y[test_index]
+
+            # Send data to GPU for xgboost
+            print("Sending data to GPU")
+            send_time = time.time()
+            dtrain = xgb.DMatrix(X_train, label=y_train)
+            dtest = xgb.DMatrix(X_test, label=y_test)
+            print(f"Sending data took {time.time() - send_time}s")
+
+            # Train xgboost model
+            print("Training model")
+            train_time = time.time()
+            model = xgb.train(param_combin, dtrain, num_boost_round=100)
+
+            # Evaluate model
+            predictions = model.predict(dtest)
+            rmse = np.sqrt(((predictions - y_test) ** 2).mean())
+            fold_results.append(rmse)
+            del dtrain, dtest, model
+            import gc
+            gc.collect()  # Force garbage collection
+            print(f"Completed fold {fold + 1}/{n_splits} for combination {count}/{len(combinations)} in {time.time() - send_time}s")
+
+        print(f"Combination {count} took {time.time() - combination_time}s")
+
+        # Store the average RMSE for this parameter combination
+        avg_rmse = np.mean(fold_results)
+        results.append({**param_combin, 'rmse': avg_rmse})
+        count += 1
+
+    df = pd.DataFrame(results)
+    print("TRAINING RESULTS")
+    print(df)
+    return df
+
+    #######################
+
+
+    # NOTE: xgb.cv() does not work on GPU, but xgb.train() works on GPU
+    # for param_combin in combinations:
+    #     # param_combin["n_jobs"] = n_jobs
+    #     # param_combin["random_state"] = random_state
+    #     # param_combin["tree_method"] = "gpu_hist"
+    #     param_combin["device"] = "cuda:2"
+    #     param_combin["tree_method"] = "hist"
+
+    #     print("Working on combination {}/{}".format(count, len(combinations)))
+    #     start_time = time.time()
+    #     count += 1
+
+    #     # Run cross validation on GPU
+    #     tmp = xgb.train(param_combin, dtrain, num_boost_round=100)
+    #     # tmp = xgb.cv(param_combin, dtrain, nfold=5)
+    #     # tmp = xgb.cv(param_combin, dtrain, nfold=5, num_boost_round=100, early_stopping_rounds=10, verbose_eval=10)
+
+    #     print(f"Took {time.time() - start_time}s")
+    #     tmp['boosting-round'] = tmp.index
+    #     for param in param_combin.keys():
+    #         tmp[param] = param_combin[param]
+    #     result = result.append(tmp)
+    # print("result!", result)
+
+
+    #######################
 
     # # Create a KFold object for cross-validation
     # kf = KFold(n_splits=5, shuffle=True, random_state=random_state)
@@ -425,36 +478,12 @@ def train_grid(
     # test_accuracy = best_model.score(X_test, y_test)
     # log.info("Test Accuracy:", test_accuracy)
 
-    log.info(f"⚡ Training took {datetime.now() - time_start}")
+    # log.info(f"⚡ Training took {datetime.now() - time_start}")
 
-    # TODO: return a df with aggregated scores for each grid combination?
+    # os.makedirs("models", exist_ok=True)
+    # with open(save_model, "wb") as f:
+    #     pickle.dump(best_model, f) #rf_model
 
-
-    # # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-    # clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
-
-    # n_seed = 100
-    # n_fold = params_grid.cv_nfold
-    # n_run = 2
-    # n_proportion = 1
-
-    # results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
-    # agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
-
-    # # Run training
-    # all_scores_df = kfold_cv(pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
-    # all_scores_df.to_csv(results_file, sep=",", index=False)
-
-    # agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
-    # agg_df.to_csv(agg_results_file, sep=",", index=False)
-    # log.info("Aggregated results:")
-    # print(agg_df)
-
-
-    os.makedirs("models", exist_ok=True)
-    with open(save_model, "wb") as f:
-        pickle.dump(best_model, f) #rf_model
-
-    return results_df
-    # return agg_df.to_dict(orient="records")
+    # return results_df
+    # # return agg_df.to_dict(orient="records")
 
