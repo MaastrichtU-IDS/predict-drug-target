@@ -1,4 +1,5 @@
 """Common functions for training the models"""
+import gc
 import numbers
 import os
 import pickle
@@ -387,15 +388,12 @@ def train_grid(
             y_train, y_test = y[train_index], y[test_index]
 
             # Send data to GPU for xgboost
-            print("Sending data to GPU")
             send_time = time.time()
             dtrain = xgb.DMatrix(X_train, label=y_train)
             dtest = xgb.DMatrix(X_test, label=y_test)
-            print(f"Sending data took {time.time() - send_time}s")
+            print(f"Sending data to GPU took {time.time() - send_time}s")
 
             # Train xgboost model
-            print("Training model")
-            train_time = time.time()
             model = xgb.train(param_combin, dtrain, num_boost_round=100)
 
             # Evaluate model
@@ -403,7 +401,6 @@ def train_grid(
             rmse = np.sqrt(((predictions - y_test) ** 2).mean())
             fold_results.append(rmse)
             del dtrain, dtest, model
-            import gc
             gc.collect()  # Force garbage collection
             print(f"Completed fold {fold + 1}/{n_splits} for combination {count}/{len(combinations)} in {time.time() - send_time}s")
 
