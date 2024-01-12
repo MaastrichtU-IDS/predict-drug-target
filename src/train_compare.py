@@ -65,54 +65,7 @@ def exclude_similar(input_dir, subject_sim_threshold: float = 1, object_sim_thre
 
     log.info(f"DF LENGTH AFTER DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    # score = train_gpu(df_known_dt, df_drugs, df_targets, params, f"{out_dir}/model_drug_target_{subject_sim_threshold}_{object_sim_threshold}.pkl")
-
-    # score_df = train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target_nosim.pkl", config=config)
-    # score_df.insert(0, 'Drug sim threshold', config.subject_sim_threshold)
-    # score_df.insert(1, 'Target sim threshold', config.object_sim_threshold)
-    # score_df.insert(2, 'CV nfold', config.cv_nfold)
-    # score_df.insert(3, 'Max depth', config.max_depth)
-
     return df_known_dt, df_drugs, df_targets
-
-
-# def train_grid_exclude_sim(input_dir, out_dir):
-#     """Define the similarities thresholds and params grid, then run training"""
-#     os.makedirs(out_dir, exist_ok=True)
-#     # Shorter version for starting
-#     # param_grid = {
-#     #     'max_depth': [3, 4],
-#     #     'learning_rate': [0.1, 0.01],
-#     #     'subsample': [0.7, 0.8],
-#     #     'colsample_bytree': [0.7, 0.8],
-#     #     'gamma': [0, 1],
-#     #     'reg_alpha': [0, 0.1],
-#     #     'reg_lambda': [1, 2],
-#     #     # 'n_estimators': [100, 200],
-#     # }
-
-#     # Longer version
-#     # subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
-#     # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
-
-#     scores_df = pd.DataFrame()
-#     for subject_sim_threshold in subject_sim_thresholds:
-#         for object_sim_threshold in object_sim_thresholds:
-#             sim_scores = exclude_similar(input_dir, out_dir, params, subject_sim_threshold, object_sim_threshold)
-#             sim_scores["subject_sim_threshold"] = subject_sim_threshold
-#             sim_scores["object_sim_threshold"] = object_sim_threshold
-#             scores_df = pd.concat([scores_df, sim_scores], ignore_index=True)
-
-#     # score_list = []
-#     # for config in configs:
-#     #     score_list.append(train_not_similar(input_dir, out_dir, config))
-#     # print(score_list)
-#     # combined_df = pd.concat(score_list)
-#     # combined_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
-
-#     print("SCORES DF", scores_df)
-#     scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
-
 
 
 if __name__ == "__main__":
