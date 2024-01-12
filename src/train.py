@@ -14,6 +14,7 @@ import pandas as pd
 import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split, KFold
+from sklearn.metrics import precision_score, recall_score, accuracy_score, roc_auc_score, f1_score, average_precision_score
 import xgboost as xgb
 from xgboost import XGBClassifier, DMatrix
 
@@ -302,16 +303,16 @@ def compute(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
 ################### Train with a grid of hyperparameters to find the best
 
 
-def get_params_combinations(params):
-	keys, values = zip(*params.items())
-	combinations = [dict(zip(keys, v)) for v in product(*values)]
-	return combinations
+# def get_params_combinations(params):
+# 	keys, values = zip(*params.items())
+# 	combinations = [dict(zip(keys, v)) for v in product(*values)]
+# 	return combinations
 
-def train_grid(
+def train_gpu(
     df_known_interactions: pd.DataFrame,
     df_drugs_embeddings: pd.DataFrame,
     df_targets_embeddings: pd.DataFrame,
-    params_grid: dict[str, int | float],
+    params: dict[str, int | float],
     save_model: str = "models/drug_target.pkl",
 ):
     """Train and compare a grid of hyperparameters
@@ -327,6 +328,7 @@ def train_grid(
         "target": df_targets_embeddings,
     }
 
+    print("Generate DT pairs")
     # Get pairs and their labels: All given known drug-target pairs are 1
     # we add pairs for missing drug/targets combinations as 0 (not known as interacting)
     pairs, labels = generate_dt_pairs(df_known_interactions)
@@ -334,23 +336,26 @@ def train_grid(
     # TODO: Split dataset for train/test?
     # X_train, X_test, y_train, y_test = train_test_split(pairs, labels, test_size=0.2, random_state=123)
 
+    print("Merging drug/target pairs and their labels in a DF")
     # Merge drug/target pairs and their labels in a DF
     train_df = pd.DataFrame(
         list(zip(pairs[:, 0], pairs[:, 1], labels)), columns=["drug", "target", "Class"]
     )
+    print("Merging embeddings in the DF")
     # Add the embeddings to the DF
     train_df = train_df.merge(embeddings["drug"], left_on="drug", right_on="drug").merge(
         embeddings["target"], left_on="target", right_on="target"
     )
 
+    print("Getting X and y")
     # X is the array of embeddings (drug+target), without other columns
     # y is the array of classes/labels (0 or 1)
     embedding_cols = train_df.columns.difference(["drug", "target", "Class"])
     X = train_df[embedding_cols].values
     y = train_df["Class"].values.ravel()
     print(f"Features count: {len(embedding_cols)}")
-    print(X)
-    print(y)
+    # print(X)
+    # print(y)
 
     ndrugs = len(embeddings["drug"])
     ntargets = len(embeddings["target"])
@@ -368,53 +373,73 @@ def train_grid(
     # https://github.com/compomics/ms2pip/blob/a8c61b41044f3f756b4551d7866d8030e68b1570/train_scripts/train_xgboost_c.py#L143
 
     results = []
-    count = 1
-    combinations = get_params_combinations(params_grid)
+    # combinations = get_params_combinations(params_grid)
 
     # NOTE: Trying to use train to run CV on GPU
-    for param_combin in combinations:
-        param_combin["device"] = "cuda:2"
-        param_combin["tree_method"] = "hist"
-        # param_combin["eval_metric"] = "rmse"  # Evaluation metric
+    # for param_combin in combinations:
+    params["device"] = "cuda:0"
+    params["tree_method"] = "hist"
+    # param_combin["eval_metric"] = "rmse"  # Evaluation metric
 
-        print("Working on combination {}/{}".format(count, len(combinations)))
-        combination_time = time.time()
-        fold_results = []
+    # print("Working on combination {}/{}".format(count, len(combinations)))
+    combination_time = time.time()
+    fold_results = []
 
-        # for fold, (train_index, test_index) in enumerate(kf.split(X)):
-        # Train model for each fold
-        for fold, (train_index, test_index) in enumerate(skf.split(X, y)):
-            X_train, X_test = X[train_index], X[test_index]
-            y_train, y_test = y[train_index], y[test_index]
+    # for fold, (train_index, test_index) in enumerate(kf.split(X)):
+    # Train model for each fold
+    for fold, (train_index, test_index) in enumerate(skf.split(X, y)):
+        X_train, X_test = X[train_index], X[test_index]
+        y_train, y_test = y[train_index], y[test_index]
 
-            # Send data to GPU for xgboost
-            send_time = time.time()
-            dtrain = xgb.DMatrix(X_train, label=y_train)
-            dtest = xgb.DMatrix(X_test, label=y_test)
-            print(f"Sending data to GPU took {time.time() - send_time}s")
+        # Send data to GPU for xgboost
+        send_time = time.time()
+        dtrain = xgb.DMatrix(X_train, label=y_train)
+        dtest = xgb.DMatrix(X_test, label=y_test)
+        print(f"Sending data to GPU took {time.time() - send_time}s")
 
-            # Train xgboost model
-            model = xgb.train(param_combin, dtrain, num_boost_round=100)
+        # Train xgboost model
+        model = xgb.train(params, dtrain, num_boost_round=100)
 
-            # Evaluate model
-            predictions = model.predict(dtest)
-            rmse = np.sqrt(((predictions - y_test) ** 2).mean())
-            fold_results.append(rmse)
-            del dtrain, dtest, model
-            gc.collect()  # Force garbage collection
-            print(f"Completed fold {fold + 1}/{n_splits} for combination {count}/{len(combinations)} in {time.time() - send_time}s")
+        # Evaluate model
+        predictions = model.predict(dtest)
+        predictions_binary = np.round(predictions) # Convert probabilities to binary outputs
 
-        print(f"Combination {count} took {time.time() - combination_time}s")
+        # Calculate metrics
+        rmse = np.sqrt(((predictions - y_test) ** 2).mean())
+        precision = precision_score(y_test, predictions_binary)
+        recall = recall_score(y_test, predictions_binary)
+        accuracy = accuracy_score(y_test, predictions_binary)
+        roc_auc = roc_auc_score(y_test, predictions)
+        f1 = f1_score(y_test, predictions_binary)
+        average_precision = average_precision_score(y_test, predictions)
 
-        # Store the average RMSE for this parameter combination
-        avg_rmse = np.mean(fold_results)
-        results.append({**param_combin, 'rmse': avg_rmse})
-        count += 1
+        fold_results.append({
+            'rmse': rmse,
+            'precision': precision,
+            'recall': recall,
+            'accuracy': accuracy,
+            'roc_auc': roc_auc,
+            'f1': f1,
+            'average_precision': average_precision
+        })
+        # rmse = np.sqrt(((predictions - y_test) ** 2).mean())
+        # fold_results.append(rmse)
+        del dtrain, dtest, model
+        gc.collect()  # Force garbage collection
+        print(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
 
-    df = pd.DataFrame(results)
+    print(f"Combination took {time.time() - combination_time}s")
+
+    # # Store the average RMSE for this parameter combination
+    # avg_rmse = np.mean(fold_results)
+    # results.append({'rmse': avg_rmse})
+    # # count += 1
+    # df = pd.DataFrame(results)
+
+    df_avg_metrics = pd.DataFrame(fold_results).mean().to_dict()
     print("TRAINING RESULTS")
-    print(df)
-    return df
+    print(df_avg_metrics)
+    return df_avg_metrics
 
     #######################
 
@@ -424,7 +449,7 @@ def train_grid(
     #     # param_combin["n_jobs"] = n_jobs
     #     # param_combin["random_state"] = random_state
     #     # param_combin["tree_method"] = "gpu_hist"
-    #     param_combin["device"] = "cuda:2"
+    #     param_combin["device"] = "cuda:0"
     #     param_combin["tree_method"] = "hist"
 
     #     print("Working on combination {}/{}".format(count, len(combinations)))

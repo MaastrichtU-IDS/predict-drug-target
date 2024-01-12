@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 
-from src.train import train, train_grid
+from src.train import train, train_gpu
 from src.utils import log, TrainingConfig
 from src.vectordb import init_vectordb
 
@@ -43,9 +43,8 @@ def drop_similar(df: str, col_id: str, threshold: float = 0.9):
 
 
 
-def exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold: float = 1, object_sim_threshold: float = 1):
+def exclude_similar(input_dir, subject_sim_threshold: float = 1, object_sim_threshold: float = 1):
     """Exclude similarities given thresholds, and run training on grid"""
-    os.makedirs(out_dir, exist_ok=True)
 
     print(f"🔨 Training for {subject_sim_threshold} - {object_sim_threshold}")
 
@@ -66,7 +65,7 @@ def exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold:
 
     log.info(f"DF LENGTH AFTER DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    score = train_grid(df_known_dt, df_drugs, df_targets, param_grid, f"{out_dir}/model_drug_target_{subject_sim_threshold}_{object_sim_threshold}.pkl")
+    # score = train_gpu(df_known_dt, df_drugs, df_targets, params, f"{out_dir}/model_drug_target_{subject_sim_threshold}_{object_sim_threshold}.pkl")
 
     # score_df = train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target_nosim.pkl", config=config)
     # score_df.insert(0, 'Drug sim threshold', config.subject_sim_threshold)
@@ -74,60 +73,78 @@ def exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold:
     # score_df.insert(2, 'CV nfold', config.cv_nfold)
     # score_df.insert(3, 'Max depth', config.max_depth)
 
-    return score
+    return df_known_dt, df_drugs, df_targets
 
 
-def train_grid_exclude_sim(input_dir, out_dir):
-    """Define the similarities thresholds and params grid, then run training"""
-    os.makedirs(out_dir, exist_ok=True)
-    # Shorter version for starting
-    subject_sim_thresholds = [1, 0.99]
-    object_sim_thresholds = [1, 0.99]
-    param_grid = {
-        'max_depth': [3, 4],
-        'learning_rate': [0.1, 0.01],
-        'subsample': [0.7, 0.8],
-        'colsample_bytree': [0.7, 0.8],
-        'gamma': [0, 1],
-        'reg_alpha': [0, 0.1],
-        'reg_lambda': [1, 2],
-        # 'n_estimators': [100, 200],
-    }
+# def train_grid_exclude_sim(input_dir, out_dir):
+#     """Define the similarities thresholds and params grid, then run training"""
+#     os.makedirs(out_dir, exist_ok=True)
+#     # Shorter version for starting
+#     # param_grid = {
+#     #     'max_depth': [3, 4],
+#     #     'learning_rate': [0.1, 0.01],
+#     #     'subsample': [0.7, 0.8],
+#     #     'colsample_bytree': [0.7, 0.8],
+#     #     'gamma': [0, 1],
+#     #     'reg_alpha': [0, 0.1],
+#     #     'reg_lambda': [1, 2],
+#     #     # 'n_estimators': [100, 200],
+#     # }
 
-    # Longer version
-    # subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
-    # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
-    # param_grid = {
-    #     'max_depth': [3, 4, 5, 6],
-    #     'learning_rate': [0.1, 0.01, 0.05],
-    #     'subsample': [0.7, 0.8, 0.9],
-    #     'colsample_bytree': [0.7, 0.8, 0.9],
-    #     'gamma': [0, 1, 2],
-    #     'reg_alpha': [0, 0.1, 0.5],
-    #     'reg_lambda': [1, 2, 5],
-    #     'n_estimators': [100, 200, 300],
-    # }
+#     # Longer version
+#     # subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+#     # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
 
-    scores_df = pd.DataFrame()
-    for subject_sim_threshold in subject_sim_thresholds:
-        for object_sim_threshold in object_sim_thresholds:
-            sim_scores = exclude_sim_and_train(input_dir, out_dir, param_grid, subject_sim_threshold, object_sim_threshold)
-            sim_scores["subject_sim_threshold"] = subject_sim_threshold
-            sim_scores["object_sim_threshold"] = object_sim_threshold
-            scores_df = pd.concat([scores_df, sim_scores], ignore_index=True)
+#     scores_df = pd.DataFrame()
+#     for subject_sim_threshold in subject_sim_thresholds:
+#         for object_sim_threshold in object_sim_thresholds:
+#             sim_scores = exclude_similar(input_dir, out_dir, params, subject_sim_threshold, object_sim_threshold)
+#             sim_scores["subject_sim_threshold"] = subject_sim_threshold
+#             sim_scores["object_sim_threshold"] = object_sim_threshold
+#             scores_df = pd.concat([scores_df, sim_scores], ignore_index=True)
 
-    # score_list = []
-    # for config in configs:
-    #     score_list.append(train_not_similar(input_dir, out_dir, config))
-    # print(score_list)
-    # combined_df = pd.concat(score_list)
-    # combined_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
+#     # score_list = []
+#     # for config in configs:
+#     #     score_list.append(train_not_similar(input_dir, out_dir, config))
+#     # print(score_list)
+#     # combined_df = pd.concat(score_list)
+#     # combined_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
 
-    print("SCORES DF", scores_df)
-    scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
+#     print("SCORES DF", scores_df)
+#     scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
 
 
 
 if __name__ == "__main__":
-    train_grid_exclude_sim("data/opentargets", "data/grid")
+    # train_grid_exclude_sim("data/opentargets", "data/grid")
     # train_not_similar("data/opentargets", "data/opentargets_not_similar")
+    out_dir = "data/grid"
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Longer version:
+    subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+    object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+    params = {
+        'max_depth': 3,
+        'learning_rate': 0.1,
+        'subsample': 0.7,
+        'colsample_bytree': 0.7,
+        'gamma': 0,
+        'reg_alpha': 0.1,
+        'reg_lambda': 1,
+        # 'n_estimators': 100,
+    }
+    scores_df = pd.DataFrame()
+    for subject_sim_threshold in subject_sim_thresholds:
+        for object_sim_threshold in object_sim_thresholds:
+            # Exclude similar then run training on GPU
+            df_known_dt, df_drugs_embeddings, df_targets_embeddings  = exclude_similar("data/opentargets", subject_sim_threshold, object_sim_threshold)
+            print(f"Similar excluded for {subject_sim_threshold}/{object_sim_threshold}")
+
+            scores = train_gpu(df_known_dt, df_drugs_embeddings, df_targets_embeddings, params)
+            scores["subject_sim_threshold"] = subject_sim_threshold
+            scores["object_sim_threshold"] = object_sim_threshold
+            scores_df = pd.concat([scores_df, scores], ignore_index=True)
+
+    print("SCORES DF", scores_df)
+    scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
