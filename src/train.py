@@ -436,7 +436,7 @@ def train_gpu(
     # # count += 1
     # df = pd.DataFrame(results)
 
-    df_avg_metrics = pd.DataFrame(fold_results).mean().to_dict()
+    df_avg_metrics = pd.DataFrame(fold_results).mean()
     print("TRAINING RESULTS")
     print(df_avg_metrics)
     return df_avg_metrics
