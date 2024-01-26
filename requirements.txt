@@ -619,7 +619,7 @@ traitlets==5.11.2
     #   jupyter-client
     #   jupyter-core
     #   matplotlib-inline
-trapi-predict-kit[web] @ git+https://github.com/MaastrichtU-IDS/trapi-predict-kit.git
+# trapi-predict-kit[web] @ git+https://github.com/MaastrichtU-IDS/trapi-predict-kit.git
     # via predict-drug-target (pyproject.toml)
 triton==2.1.0
     # via torch

@@ -29,7 +29,7 @@ classifiers = [
 
 dependencies = [
     # "trapi-predict-kit[web] >=0.2.0",
-    "trapi-predict-kit[web] @ git+https://github.com/MaastrichtU-IDS/trapi-predict-kit.git",
+    "trapi-predict-kit[web] @ git+https://github.com/MaastrichtU-IDS/trapi-predict-kit.git @ main",
     "MolecularTransformerEmbeddings @ git+https://github.com/vemonet/MolecularTransformerEmbeddings.git",
     "fair-esm",
     "bio",
