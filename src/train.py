@@ -15,6 +15,7 @@ import torch
 from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split, KFold
 from sklearn.metrics import precision_score, recall_score, accuracy_score, roc_auc_score, f1_score, average_precision_score
+from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 from xgboost import XGBClassifier, DMatrix
 
@@ -375,11 +376,9 @@ def train_gpu(
     results = []
     # combinations = get_params_combinations(params_grid)
 
-    # NOTE: Trying to use train to run CV on GPU
-    # for param_combin in combinations:
-    params["device"] = "cuda:0"
-    params["tree_method"] = "hist"
-    # param_combin["eval_metric"] = "rmse"  # Evaluation metric
+    # NOTE: To run XGB on GPU:
+    # params["device"] = "cuda:0"
+    # params["tree_method"] = "hist"
 
     # print("Working on combination {}/{}".format(count, len(combinations)))
     combination_time = time.time()
@@ -388,20 +387,23 @@ def train_gpu(
     # for fold, (train_index, test_index) in enumerate(kf.split(X)):
     # Train model for each fold
     for fold, (train_index, test_index) in enumerate(skf.split(X, y)):
-        X_train, X_test = X[train_index], X[test_index]
+        x_train, x_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        # Send data to GPU for xgboost
-        send_time = time.time()
-        dtrain = xgb.DMatrix(X_train, label=y_train)
-        dtest = xgb.DMatrix(X_test, label=y_test)
-        print(f"Sending data to GPU took {time.time() - send_time}s")
+        # # Send data to GPU for xgboost
+        # send_time = time.time()
+        # dtrain = xgb.DMatrix(X_train, label=y_train)
+        # dtest = xgb.DMatrix(X_test, label=y_test)
+        # print(f"Sending data to GPU took {time.time() - send_time}s")
 
         # Train xgboost model
-        model = xgb.train(params, dtrain, num_boost_round=100)
+        # model = xgb.train(params, dtrain, num_boost_round=100)
+
+        model = RandomForestClassifier(**params)
+        model.fit(x_train, y_train)
 
         # Evaluate model
-        predictions = model.predict(dtest)
+        predictions = model.predict(x_test)
         predictions_binary = np.round(predictions) # Convert probabilities to binary outputs
 
         # Calculate metrics
@@ -424,8 +426,8 @@ def train_gpu(
         })
         # rmse = np.sqrt(((predictions - y_test) ** 2).mean())
         # fold_results.append(rmse)
-        del dtrain, dtest, model
-        gc.collect()  # Force garbage collection
+        # del dtrain, dtest, model
+        gc.collect()  # Force garbage collection for xgb on GPU
         print(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
 
     print(f"Combination took {time.time() - combination_time}s")
