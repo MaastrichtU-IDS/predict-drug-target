@@ -391,7 +391,7 @@ def train_gpu(
         y_train, y_test = y[train_index], y[test_index]
 
         # # Send data to GPU for xgboost
-        # send_time = time.time()
+        send_time = time.time()
         # dtrain = xgb.DMatrix(X_train, label=y_train)
         # dtest = xgb.DMatrix(X_test, label=y_test)
         # print(f"Sending data to GPU took {time.time() - send_time}s")
