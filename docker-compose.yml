@@ -13,6 +13,7 @@ services:
       # GPU: predict-drug-target.137.120.31.160.nip.io
       # CPU node3: predict-drug-target.137.120.31.148.nip.io
       - VIRTUAL_PORT=8000
+      - NO_JAEGER=true
     deploy:
       resources:
         reservations:
@@ -23,7 +24,8 @@ services:
     shm_size: '4g'
     # ports:
     #   - 8000:8000
-    command: uvicorn --host 0.0.0.0 src.api:app --reload
+    command: uvicorn --host 0.0.0.0 src.api:app
+    # --reload
     networks:
       - nginx
 

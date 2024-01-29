@@ -5,7 +5,6 @@ import os
 import pickle
 import time
 import random
-import concurrent.futures
 from datetime import date, datetime
 from itertools import product
 
@@ -19,7 +18,6 @@ from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 from xgboost import XGBClassifier, DMatrix
 
-from src.embeddings import compute_drug_embedding, compute_target_embedding
 from src.utils import log, TrainingConfig
 from src.vectordb import init_vectordb
 
@@ -263,44 +261,6 @@ def train(
     # return agg_df.to_dict(orient="records")
 
 
-def compute(df_known_dt: pd.DataFrame | str, out_dir: str = "data"):
-    """Compute embeddings and train model to predict interactions for a dataframe with 2 cols: drug, target"""
-    if isinstance(df_known_dt, str):
-        df_known_dt = pd.read_csv(df_known_dt)
-
-    # These functions retrieves SMILES and compute embeddings in 1 batch
-    log.info("Running drug and target embeddings computing in parallel")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        # Submit the drug and target embeddings calculation to the executor
-        future_drugs = executor.submit(compute_drug_embedding, vectordb, set(df_known_dt["drug"].tolist()), out_dir)
-        future_targets = executor.submit(compute_target_embedding, vectordb, set(df_known_dt["target"].tolist()), out_dir)
-        # Get the results
-        df_drugs = future_drugs.result()
-        df_targets = future_targets.result()
-
-    # Save result to CSV
-    # df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir=out_dir)
-    df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv", index=False)
-    log.info(f"Drugs embeddings saved to {out_dir}")
-
-    # df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir=out_dir)
-    df_targets.to_csv(f"{out_dir}/targets_embeddings.csv", index=False)
-    log.info("Targets embeddings saved to {out_dir}")
-
-    # Remove from df_known_dt entries where we don't have SMILES or AA seq
-    known_dt_before = len(df_known_dt)
-    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_targets[["target"]], on="target")
-    log.info(
-        f"Number of known interactions before and after removing rows for which we don't have smiles/sequence: {known_dt_before} > {len(df_known_dt)}"
-    )
-    df_known_dt.to_csv(f"{out_dir}/known_drugs_targets.csv", index=False)
-
-    # Run the training
-    log.info("Start training")
-    # return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target.pkl")
-    return df_known_dt, df_drugs, df_targets
-
-
 ################### Train with a grid of hyperparameters to find the best
 
 
@@ -329,7 +289,7 @@ def train_gpu(
         "target": df_targets_embeddings,
     }
 
-    print("Generate DT pairs")
+    print("Generate Drug-Target pairs DF")
     # Get pairs and their labels: All given known drug-target pairs are 1
     # we add pairs for missing drug/targets combinations as 0 (not known as interacting)
     pairs, labels = generate_dt_pairs(df_known_interactions)
@@ -337,18 +297,18 @@ def train_gpu(
     # TODO: Split dataset for train/test?
     # X_train, X_test, y_train, y_test = train_test_split(pairs, labels, test_size=0.2, random_state=123)
 
-    print("Merging drug/target pairs and their labels in a DF")
+    print("Merging drug/target labels to the DF")
     # Merge drug/target pairs and their labels in a DF
     train_df = pd.DataFrame(
         list(zip(pairs[:, 0], pairs[:, 1], labels)), columns=["drug", "target", "Class"]
     )
-    print("Merging embeddings in the DF")
+    print("Merging embeddings to the DF")
     # Add the embeddings to the DF
     train_df = train_df.merge(embeddings["drug"], left_on="drug", right_on="drug").merge(
         embeddings["target"], left_on="target", right_on="target"
     )
 
-    print("Getting X and y")
+    print("Getting X and y data")
     # X is the array of embeddings (drug+target), without other columns
     # y is the array of classes/labels (0 or 1)
     embedding_cols = train_df.columns.difference(["drug", "target", "Class"])
@@ -399,6 +359,7 @@ def train_gpu(
         # Train xgboost model
         # model = xgb.train(params, dtrain, num_boost_round=100)
 
+        # Train Random Forest model
         model = RandomForestClassifier(**params)
         model.fit(x_train, y_train)
 

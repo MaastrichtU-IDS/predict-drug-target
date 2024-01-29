@@ -1,4 +1,6 @@
 import os
+import concurrent.futures
+from typing import Any
 
 import esm
 import pandas as pd
@@ -266,3 +268,41 @@ def compute_target_embedding(
         df.loc[len(df)] = [target_id] + embeddings
     vectordb.add("target", upload_list)
     return df
+
+
+def compute(df_known_dt: pd.DataFrame | str, vectordb: Any, out_dir: str = "data"):
+    """Compute embeddings and train model to predict interactions for a dataframe with 2 cols: drug, target"""
+    if isinstance(df_known_dt, str):
+        df_known_dt = pd.read_csv(df_known_dt)
+
+    # These functions retrieves SMILES and compute embeddings in 1 batch
+    log.info("Running drug and target embeddings computing in parallel")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit the drug and target embeddings calculation to the executor
+        future_drugs = executor.submit(compute_drug_embedding, vectordb, set(df_known_dt["drug"].tolist()), out_dir)
+        future_targets = executor.submit(compute_target_embedding, vectordb, set(df_known_dt["target"].tolist()), out_dir)
+        # Get the results
+        df_drugs = future_drugs.result()
+        df_targets = future_targets.result()
+
+    # Save result to CSV
+    # df_drugs = compute_drug_embedding(vectordb, set(df_known_dt["drug"].tolist()), tmp_dir=out_dir)
+    df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv", index=False)
+    log.info(f"Drugs embeddings saved to {out_dir}")
+
+    # df_targets = compute_target_embedding(vectordb, set(df_known_dt["target"].tolist()), tmp_dir=out_dir)
+    df_targets.to_csv(f"{out_dir}/targets_embeddings.csv", index=False)
+    log.info("Targets embeddings saved to {out_dir}")
+
+    # Remove from df_known_dt entries where we don't have SMILES or AA seq
+    known_dt_before = len(df_known_dt)
+    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_targets[["target"]], on="target")
+    log.info(
+        f"Number of known interactions before and after removing rows for which we don't have smiles/sequence: {known_dt_before} > {len(df_known_dt)}"
+    )
+    df_known_dt.to_csv(f"{out_dir}/known_drugs_targets.csv", index=False)
+
+    # Run the training
+    log.info("Start training")
+    # return train(df_known_dt, df_drugs, df_targets, save_model=f"{out_dir}/opentarget_drug_target.pkl")
+    return df_known_dt, df_drugs, df_targets

@@ -4,9 +4,10 @@ import os
 
 import pandas as pd
 from tqdm import tqdm
+from src import vectordb
 
-from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.train import train, compute
+# from src.embeddings import compute_drug_embedding, compute_target_embedding
+from src.embeddings import compute
 from src.utils import COLLECTIONS, log, get_pref_ids
 from src.vectordb import init_vectordb
 
@@ -15,7 +16,7 @@ from src.vectordb import init_vectordb
 # Download opentargets before running this script: ./scripts/download_opentargets.sh
 
 # Output file path
-output_file_path = "../data/opentargets/merged_parsed.csv"
+# output_file_path = "../data/opentargets/merged_parsed.csv"
 
 
 def get_jsonl_files(target_directory) -> list[str]:
@@ -51,45 +52,54 @@ def ensembl_to_uniprot():
 # NOTE: to train the model on new data you will just need a CSV of known drug-target pairs with 2 columns: `drug` and `target`
 # Use CURIEs for the drugs and targets IDs. Accepted namespaces: UniProtKB:, PUBCHEM.COMPOUNT:, CHEMBL.COMPOUND:
 
-def train_opentargets(input_dir, out_dir):
+def prepare_opentargets(input_dir, out_dir):
     """Compute embeddings and train the model using opentargets data."""
     os.makedirs(out_dir, exist_ok=True)
-    # known_drug_targets = []
+    known_drug_targets = []
 
-    # ensembl_to_uniprot_dict = ensembl_to_uniprot()
-    # no_match = set()
-    # print(len(ensembl_to_uniprot_dict))
+    ensembl_to_uniprot_dict = ensembl_to_uniprot()
+    no_match = set()
+    print(len(ensembl_to_uniprot_dict))
 
-    # # first extract the drug-target pairs from the opentargets json files
-    # json_files = get_jsonl_files(input_dir)
-    # for json_file in tqdm(json_files, desc="Processing files"):
-    #     # log.info(json_file)
-    #     for drug_id, target_id in extract_data_from_jsonl(json_file):
-    #         try:
-    #             known_drug_targets.append(
-    #                 {
-    #                     "drug": f"CHEMBL.COMPOUND:{drug_id}",
-    #                     "target": ensembl_to_uniprot_dict[target_id],
-    #                 }
-    #             )
-    #         except:
-    #             no_match.add(target_id)
+    # first extract the drug-target pairs from the opentargets json files
+    json_files = get_jsonl_files(input_dir)
+    for json_file in tqdm(json_files, desc="Processing files"):
+        # log.info(json_file)
+        for drug_id, target_id in extract_data_from_jsonl(json_file):
+            try:
+                known_drug_targets.append(
+                    {
+                        "drug": f"CHEMBL.COMPOUND:{drug_id}",
+                        "target": ensembl_to_uniprot_dict[target_id],
+                    }
+                )
+            except:
+                no_match.add(target_id)
 
-    # log.info(f"No UniProt match for {len(no_match)} targets, e.g. {' ,'.join(list(no_match))}")
+    log.info(f"No UniProt match for {len(no_match)} targets, e.g. {' ,'.join(list(no_match))}")
 
-    # df_known_dt = pd.DataFrame(known_drug_targets)
-    # print(df_known_dt)
-    # df_known_dt, df_drugs, df_targets = compute(df_known_dt, out_dir)
+    df_known_dt = pd.DataFrame(known_drug_targets)
+    known_dt_path = f"{out_dir}/known_drugs_targets.csv"
+
+    print(df_known_dt)
+    print(f"Known drug-targets pairs stored in {known_dt_path}")
+    df_known_dt.to_csv(known_dt_path)
+
+    print("Computing embeddings")
+    df_known_dt2, df_drugs, df_targets = compute(df_known_dt, init_vectordb(), out_dir)
+
+    df_drugs.to_csv(f"{out_dir}/drugs_embeddings.csv")
+    df_targets.to_csv(f"{out_dir}/targets_embeddings.csv")
 
     # NOTE: block to skip computing
-    df_known_dt = pd.read_csv(f"data/opentargets/known_drugs_targets.csv")
-    df_drugs = pd.read_csv(f"data/opentargets/drugs_embeddings.csv")
-    df_targets = pd.read_csv(f"data/opentargets/targets_embeddings.csv")
+    # df_known_dt, df_drugs, df_targets = compute(df_known_dt, out_dir)
+    # df_known_dt = pd.read_csv(f"data/opentargets/known_drugs_targets.csv")
+    # df_drugs = pd.read_csv(f"data/opentargets/drugs_embeddings.csv")
+    # df_targets = pd.read_csv(f"data/opentargets/targets_embeddings.csv")
+    # scores = train(df_known_dt, df_drugs, df_targets, f"{out_dir}/model.pkl")
 
-    scores = train(df_known_dt, df_drugs, df_targets, f"{out_dir}/model.pkl")
 
-
-def train_drugbank():
+def prepare_drugbank():
     """Compute embeddings and train the model using drugbank data."""
     file_known_dt = "data/drugbank/DB_DTI_4vectordb.csv"
     out_dir = "data/drugbank"
@@ -100,9 +110,10 @@ def train_drugbank():
     print(convert_dict)
     df_known_dt["drug"] = df_known_dt["drug"].apply(lambda curie: convert_dict[curie])
     print(df_known_dt)
-    df_known_dt, df_drugs, df_targets = compute(df_known_dt, out_dir)
-    scores = train(df_known_dt, df_drugs, df_targets, f"{out_dir}/model.pkl")
+    df_known_dt.to_csv("data/drugbank/known_drugs_targets.csv")
+    # df_known_dt, df_drugs, df_targets = compute(df_known_dt, out_dir)
+    # scores = train(df_known_dt, df_drugs, df_targets, f"{out_dir}/model.pkl")
 
 if __name__ == "__main__":
-    # train_drugbank()
-    train_opentargets("data/download/opentargets/knownDrugsAggregated", "data/opentargets")
+    # prepare_drugbank()
+    prepare_opentargets("data/download/opentargets/knownDrugsAggregated", "data/opentargets")

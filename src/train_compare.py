@@ -8,7 +8,7 @@ from src.vectordb import init_vectordb
 
 # NOTE: script to test various config while training the model
 # For speed, it DOES NOT compute embeddings for all drugs and targets
-# It expects the embeddings to be already generated in a CSV (by train_compute.py)
+# It expects the embeddings to be already generated in a CSV (by prepare.py)
 
 
 def drop_similar(df: str, col_id: str, threshold: float = 0.9):
@@ -75,16 +75,18 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     # Longer version:
-    subject_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
-    object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.95, 0.90]
+    # subject_sim_thresholds = [1, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70]
+    # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.96, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90]
+    subject_sim_thresholds = [1]
+    object_sim_thresholds = [1]
     params = {
-        'max_depth': 3,
-        'learning_rate': 0.1,
-        'subsample': 0.7,
-        'colsample_bytree': 0.7,
-        'gamma': 0,
-        'reg_alpha': 0.1,
-        'reg_lambda': 1,
+        # 'max_depth': 3,
+        # 'learning_rate': 0.1,
+        # 'subsample': 0.7,
+        # 'colsample_bytree': 0.7,
+        # 'gamma': 0,
+        # 'reg_alpha': 0.1,
+        # 'reg_lambda': 1,
         # 'n_estimators': 100,
     }
     scores_df = pd.DataFrame()
