@@ -5,6 +5,7 @@ import os
 import pickle
 import time
 import random
+import json
 from datetime import date, datetime
 from itertools import product
 
@@ -289,32 +290,29 @@ def train_gpu(
         "target": df_targets_embeddings,
     }
 
-    print("Generate Drug-Target pairs DF")
+    log.info("Generate Drug-Target pairs DF")
     # Get pairs and their labels: All given known drug-target pairs are 1
     # we add pairs for missing drug/targets combinations as 0 (not known as interacting)
     pairs, labels = generate_dt_pairs(df_known_interactions)
 
-    # TODO: Split dataset for train/test?
-    # X_train, X_test, y_train, y_test = train_test_split(pairs, labels, test_size=0.2, random_state=123)
-
-    print("Merging drug/target labels to the DF")
+    log.info("Merging drug/target labels to the DF")
     # Merge drug/target pairs and their labels in a DF
     train_df = pd.DataFrame(
         list(zip(pairs[:, 0], pairs[:, 1], labels)), columns=["drug", "target", "Class"]
     )
-    print("Merging embeddings to the DF")
+    log.info("Merging embeddings to the DF")
     # Add the embeddings to the DF
     train_df = train_df.merge(embeddings["drug"], left_on="drug", right_on="drug").merge(
         embeddings["target"], left_on="target", right_on="target"
     )
 
-    print("Getting X and y data")
+    log.info("Getting X and y data")
     # X is the array of embeddings (drug+target), without other columns
     # y is the array of classes/labels (0 or 1)
     embedding_cols = train_df.columns.difference(["drug", "target", "Class"])
     X = train_df[embedding_cols].values
     y = train_df["Class"].values.ravel()
-    print(f"Features count: {len(embedding_cols)}")
+    log.info(f"Features count: {len(embedding_cols)}")
     # print(X)
     # print(y)
 
@@ -328,21 +326,22 @@ def train_gpu(
     n_splits = 5
 
     # pairs, classes = balance_data(pairs_all, classes_all, n_proportion)
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    # skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
 
     # TODO: xgboost don't support gridsearch on GPU by default
     # https://github.com/compomics/ms2pip/blob/a8c61b41044f3f756b4551d7866d8030e68b1570/train_scripts/train_xgboost_c.py#L143
 
-    results = []
-    # combinations = get_params_combinations(params_grid)
-
     # NOTE: To run XGB on GPU:
-    # params["device"] = "cuda:0"
-    # params["tree_method"] = "hist"
+    params["device"] = "cuda:0"
+    params["tree_method"] = "hist"
 
+    # combinations = get_params_combinations(params_grid)
     # print("Working on combination {}/{}".format(count, len(combinations)))
     combination_time = time.time()
     fold_results = []
+    best_accuracy = 0
+    os.makedirs("models", exist_ok=True)
 
     # for fold, (train_index, test_index) in enumerate(kf.split(X)):
     # Train model for each fold
@@ -350,21 +349,22 @@ def train_gpu(
         x_train, x_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        # # Send data to GPU for xgboost
+        # Send data to GPU for XGBoost
         send_time = time.time()
-        # dtrain = xgb.DMatrix(X_train, label=y_train)
-        # dtest = xgb.DMatrix(X_test, label=y_test)
+        dtrain = xgb.DMatrix(x_train, label=y_train)
+        dtest = xgb.DMatrix(x_test, label=y_test)
         # print(f"Sending data to GPU took {time.time() - send_time}s")
 
-        # Train xgboost model
-        # model = xgb.train(params, dtrain, num_boost_round=100)
+        # Train XGBoost model
+        model = xgb.train(params, dtrain, num_boost_round=100)
+        predictions = model.predict(dtest)
 
         # Train Random Forest model
-        model = RandomForestClassifier(**params)
-        model.fit(x_train, y_train)
+        # model = RandomForestClassifier(**params)
+        # model.fit(x_train, y_train)
+        # predictions = model.predict(x_test)
 
         # Evaluate model
-        predictions = model.predict(x_test)
         predictions_binary = np.round(predictions) # Convert probabilities to binary outputs
 
         # Calculate metrics
@@ -385,13 +385,25 @@ def train_gpu(
             'f1': f1,
             'average_precision': average_precision
         })
+
+        # Check if model is better than others, and dump the model in a local file if it is better
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            with open(save_model, "wb") as f:
+                pickle.dump(model, f)
+
+        # os.makedirs("models", exist_ok=True)
+        # with open(save_model_path, "wb") as f:
+        #     pickle.dump(model, f)
+
         # rmse = np.sqrt(((predictions - y_test) ** 2).mean())
         # fold_results.append(rmse)
         # del dtrain, dtest, model
         gc.collect()  # Force garbage collection for xgb on GPU
-        print(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
+        print(fold_results)
+        log.info(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
 
-    print(f"Combination took {time.time() - combination_time}s")
+    log.info(f"Combination took {time.time() - combination_time}s")
 
     # # Store the average RMSE for this parameter combination
     # avg_rmse = np.mean(fold_results)
@@ -404,71 +416,97 @@ def train_gpu(
     print(df_avg_metrics)
     return df_avg_metrics
 
-    #######################
 
 
-    # NOTE: xgb.cv() does not work on GPU, but xgb.train() works on GPU
-    # for param_combin in combinations:
-    #     # param_combin["n_jobs"] = n_jobs
-    #     # param_combin["random_state"] = random_state
-    #     # param_combin["tree_method"] = "gpu_hist"
-    #     param_combin["device"] = "cuda:0"
-    #     param_combin["tree_method"] = "hist"
 
-    #     print("Working on combination {}/{}".format(count, len(combinations)))
-    #     start_time = time.time()
-    #     count += 1
+################## Functions to exclude drugs/targets that are too similar
 
-    #     # Run cross validation on GPU
-    #     tmp = xgb.train(param_combin, dtrain, num_boost_round=100)
-    #     # tmp = xgb.cv(param_combin, dtrain, nfold=5)
-    #     # tmp = xgb.cv(param_combin, dtrain, nfold=5, num_boost_round=100, early_stopping_rounds=10, verbose_eval=10)
+def drop_similar(df: str, col_id: str, threshold: float = 0.9):
+    """Given a DF remove all entities that are too similar"""
+    vectordb = init_vectordb(recreate=False)
+    indices_to_drop = []
+    # TODO: remove things that are too similar
+    # in df_drugs and df_targets
+    for i, row in df.iterrows():
+        if row[col_id] in indices_to_drop:
+            # If we already plan to drop this row, skip it
+            continue
+        # The column ID and the collection are the same (drug or target)
+        ent_matching = vectordb.get(col_id, row[col_id])
+        if ent_matching:
+            # Find vectors that are similar to the vector of the given drug ID
+            search_res = vectordb.search(col_id, ent_matching[0].vector)
+            for res in search_res:
+                if threshold < res.score < 1:
+                    indices_to_drop.append(res.payload['id'])
+                    df = df[df[col_id] != res.payload['id']]
+                # print(f"{res.payload['id']}: {res.score} ({res.id})")
+        else:
+            print(f"No match for {row[col_id]}")
+    log.info(f"DROPPING {col_id}: {len(indices_to_drop)}")
+    # return df.drop(indices_to_drop)
+    return df
 
-    #     print(f"Took {time.time() - start_time}s")
-    #     tmp['boosting-round'] = tmp.index
-    #     for param in param_combin.keys():
-    #         tmp[param] = param_combin[param]
-    #     result = result.append(tmp)
-    # print("result!", result)
 
 
-    #######################
+def exclude_similar(input_dir, subject_sim_threshold: float = 1, object_sim_threshold: float = 1):
+    """Exclude similarities given thresholds, and run training on grid"""
 
-    # # Create a KFold object for cross-validation
-    # kf = KFold(n_splits=5, shuffle=True, random_state=random_state)
-    # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='f1', cv=kf, n_jobs=n_jobs)
-    # # or scoring='accuracy'
+    print(f"🔨 Training for {subject_sim_threshold} - {object_sim_threshold}")
 
-    # log.info("Fitting grid search")
-    # grid_search.fit(X, y)
-    # grid_search
+    # Precomputed embeddings
+    df_known_dt = pd.read_csv(f"{input_dir}/known_drugs_targets.csv")
+    df_drugs = pd.read_csv(f"{input_dir}/drugs_embeddings.csv")
+    df_targets = pd.read_csv(f"{input_dir}/targets_embeddings.csv")
 
-    # # Without CV:temp_folder
-    # # grid_search = GridSearchCV(estimator=xgb_model, param_grid=params_grid, scoring='accuracy', cv=5, n_jobs=n_jobs)
+    log.info(f"DF LENGTH BEFORE DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    # # Perform grid search on the training data
-    # # grid_search.fit(X_train, y_train)
+    if subject_sim_threshold < 1:
+        df_drugs = drop_similar(df_drugs, "drug", subject_sim_threshold)
 
-    # # Print the best parameters and the corresponding accuracy
-    # log.info("Best Parameters:", grid_search.best_params_)
-    # log.info("Best Accuracy:", grid_search.best_score_)
+    if object_sim_threshold < 1:
+        df_targets = drop_similar(df_targets, "target", object_sim_threshold)
 
-    # # Creating DataFrame from cv_results
-    # results_df = pd.DataFrame(grid_search.cv_results_)
-    # results_df = results_df[['params', 'mean_test_score', 'std_test_score', 'rank_test_score']]
+    df_known_dt = df_known_dt.merge(df_drugs[["drug"]], on="drug").merge(df_targets[["target"]], on="target")
 
-    # # Evaluate on test data
-    # best_model = grid_search.best_estimator_
+    log.info(f"DF LENGTH AFTER DROPPING: {len(df_drugs)} drugs and {len(df_targets)} targets, and {len(df_known_dt)} known pairs")
 
-    # test_accuracy = best_model.score(X_test, y_test)
-    # log.info("Test Accuracy:", test_accuracy)
+    return df_known_dt, df_drugs, df_targets
 
-    # log.info(f"⚡ Training took {datetime.now() - time_start}")
 
-    # os.makedirs("models", exist_ok=True)
-    # with open(save_model, "wb") as f:
-    #     pickle.dump(best_model, f) #rf_model
+if __name__ == "__main__":
+    # train_grid_exclude_sim("data/opentargets", "data/grid")
+    # train_not_similar("data/opentargets", "data/opentargets_not_similar")
+    out_dir = "data/grid"
+    os.makedirs(out_dir, exist_ok=True)
 
-    # return results_df
-    # # return agg_df.to_dict(orient="records")
+    # Longer version:
+    # subject_sim_thresholds = [1, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70]
+    # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.96, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90]
+    subject_sim_thresholds = [1]
+    object_sim_thresholds = [1]
+    params = {
+        'max_depth': 3,
+        'n_estimators': 100,
+        # For XGB:
+        'learning_rate': 0.1,
+        'subsample': 0.7,
+        'colsample_bytree': 0.7,
+        'gamma': 0,
+        'reg_alpha': 0.1,
+        'reg_lambda': 1,
+    }
+    scores_df = pd.DataFrame()
+    for subject_sim_threshold in subject_sim_thresholds:
+        for object_sim_threshold in object_sim_thresholds:
+            # Exclude similar then run training on GPU
+            df_known_dt, df_drugs_embeddings, df_targets_embeddings  = exclude_similar("data/opentargets", subject_sim_threshold, object_sim_threshold)
+            print(f"Similar excluded for {subject_sim_threshold}/{object_sim_threshold}")
 
+            scores = train_gpu(df_known_dt, df_drugs_embeddings, df_targets_embeddings, params)
+            scores["subject_sim_threshold"] = subject_sim_threshold
+            scores["object_sim_threshold"] = object_sim_threshold
+            scores_df = pd.concat([scores_df, scores], ignore_index=True)
+
+    print("SCORES DF", scores_df)
+    scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
