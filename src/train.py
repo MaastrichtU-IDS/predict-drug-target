@@ -396,9 +396,7 @@ def train_gpu(
         # with open(save_model_path, "wb") as f:
         #     pickle.dump(model, f)
 
-        # rmse = np.sqrt(((predictions - y_test) ** 2).mean())
-        # fold_results.append(rmse)
-        # del dtrain, dtest, model
+        del dtrain, dtest, model
         gc.collect()  # Force garbage collection for xgb on GPU
         print(fold_results)
         log.info(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
