@@ -105,6 +105,7 @@ def crossvalid(train_df, test_df, clfs, run_index, fold_index):
     print("FIT X Y")
     print(X)
     print(y)
+    print(len(X), len(y))
 
     results = pd.DataFrame()
     for name, clf in clfs:
@@ -198,8 +199,8 @@ def train(
     }
 
     today = date.today()
-    results_file = f"./data/results/drugbank_drug_targets_scores_{today}.csv"
-    agg_results_file = f"./data/results/drugbank_drug_targets_agg_{today}.csv"
+    results_file = f"./data/results/openpredict_drug_targets_scores_{today}.csv"
+    agg_results_file = f"./data/results/openpredict_drug_targets_agg_{today}.csv"
 
     # Get pairs
     pairs, labels = generate_dt_pairs(df_known_interactions)
@@ -212,41 +213,44 @@ def train(
     # nb_model = GaussianNB()
     # lr_model = linear_model.LogisticRegression()
     # rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
-    # rf_model = ensemble.RandomForestClassifier(
-    #     n_estimators=200,
-    #     criterion="log_loss",
-    #     max_depth=config.max_depth,
-    #     min_samples_split=2,
-    #     min_samples_leaf=1,
-    #     max_features="sqrt",
-    #     n_jobs=-1,
-    # )
-    xgb_model = XGBClassifier(
+    rf_model = ensemble.RandomForestClassifier(
         n_estimators=200,
+        criterion="log_loss",
         max_depth=config.max_depth,
-        learning_rate=0.1,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        gamma=0,
-        reg_alpha=0,
-        reg_lambda=1,
-        objective='binary:logistic',  # For binary classification
+        min_samples_split=2,
+        min_samples_leaf=1,
+        max_features="sqrt",
         n_jobs=-1,
-        random_state=42,
-        tree_method='hist', # Use GPU optimized histogram algorithm
-        # device='gpu',
+        class_weight="balanced",
     )
+    # xgb_model = XGBClassifier(
+    #     n_estimators=200,
+    #     max_depth=config.max_depth,
+    #     learning_rate=0.1,
+    #     subsample=0.8,
+    #     colsample_bytree=0.8,
+    #     gamma=0,
+    #     reg_alpha=0,
+    #     reg_lambda=1,
+    #     objective='binary:logistic',  # For binary classification
+    #     n_jobs=-1,
+    #     random_state=42,
+    #     tree_method='hist', # Use GPU optimized histogram algorithm
+    #     # device='gpu',
+    # )
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-    clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
+    clfs = [("Random Forest", rf_model)] # "XGBoost", xgb_model
 
     n_seed = 100
-    n_fold = config.cv_nfold
+    n_fold = 10
     n_run = 2
     n_proportion = 1
+    sc = None
 
     # Run training
     all_scores_df = kfold_cv(pairs, labels, embeddings, clfs, n_run, n_fold, n_proportion, n_seed)
+
     all_scores_df.to_csv(results_file, sep=",", index=False)
 
     agg_df = all_scores_df.groupby(["method", "run"]).mean().groupby("method").mean()
@@ -256,9 +260,9 @@ def train(
 
     os.makedirs("models", exist_ok=True)
     with open(save_model, "wb") as f:
-        pickle.dump(xgb_model, f) #rf_model
+        pickle.dump(rf_model, f) # xgb_model
 
-    return agg_df
+    return agg_df.mean()
     # return agg_df.to_dict(orient="records")
 
 
@@ -295,6 +299,8 @@ def train_gpu(
     # we add pairs for missing drug/targets combinations as 0 (not known as interacting)
     pairs, labels = generate_dt_pairs(df_known_interactions)
 
+    pairs, labels = balance_data(pairs, labels, 1)
+
     log.info("Merging drug/target labels to the DF")
     # Merge drug/target pairs and their labels in a DF
     train_df = pd.DataFrame(
@@ -312,29 +318,26 @@ def train_gpu(
     embedding_cols = train_df.columns.difference(["drug", "target", "Class"])
     X = train_df[embedding_cols].values
     y = train_df["Class"].values.ravel()
-    log.info(f"Features count: {len(embedding_cols)}")
-    # print(X)
-    # print(y)
+    log.info(f"Features count: {len(embedding_cols)} | Length training df: {len(X)}, {len(y)}")
 
     ndrugs = len(embeddings["drug"])
     ntargets = len(embeddings["target"])
     _unique, counts = np.unique(labels, return_counts=True)
     ndrugtargets = counts[1]
     log.info(f"Training based on {ndrugtargets} Drug-Targets known interactions: {ndrugs} drugs | {ntargets} targets")
-    random_state=123 # Or 42?
-    n_jobs = 2 # Or -1
+    random_state=42 # Or 123?
+    n_jobs = -1 # Or 2?
     n_splits = 5
 
-    # pairs, classes = balance_data(pairs_all, classes_all, n_proportion)
     # skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True)
 
     # TODO: xgboost don't support gridsearch on GPU by default
     # https://github.com/compomics/ms2pip/blob/a8c61b41044f3f756b4551d7866d8030e68b1570/train_scripts/train_xgboost_c.py#L143
 
-    # NOTE: To run XGB on GPU:
-    params["device"] = "cuda:0"
-    params["tree_method"] = "hist"
+    # # NOTE: To run XGB on GPU:
+    # params["device"] = "cuda:0"
+    # params["tree_method"] = "hist"
 
     # combinations = get_params_combinations(params_grid)
     # print("Working on combination {}/{}".format(count, len(combinations)))
@@ -349,20 +352,20 @@ def train_gpu(
         x_train, x_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
-        # Send data to GPU for XGBoost
+#         # Send data to GPU for XGBoost
         send_time = time.time()
-        dtrain = xgb.DMatrix(x_train, label=y_train)
-        dtest = xgb.DMatrix(x_test, label=y_test)
-        # print(f"Sending data to GPU took {time.time() - send_time}s")
+#         dtrain = xgb.DMatrix(x_train, label=y_train)
+#         dtest = xgb.DMatrix(x_test, label=y_test)
+#         # print(f"Sending data to GPU took {time.time() - send_time}s")
 
-        # Train XGBoost model
-        model = xgb.train(params, dtrain, num_boost_round=100)
-        predictions = model.predict(dtest)
+#         # Train XGBoost model
+#         model = xgb.train(params, dtrain, num_boost_round=100)
+#         predictions = model.predict(dtest)
 
         # Train Random Forest model
-        # model = RandomForestClassifier(**params)
-        # model.fit(x_train, y_train)
-        # predictions = model.predict(x_test)
+        model = RandomForestClassifier(**params)
+        model.fit(x_train, y_train)
+        predictions = model.predict(x_test)
 
         # Evaluate model
         predictions_binary = np.round(predictions) # Convert probabilities to binary outputs
@@ -484,16 +487,26 @@ if __name__ == "__main__":
     # object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.96, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90]
     subject_sim_thresholds = [1]
     object_sim_thresholds = [1]
+    # params = { #XGB
+    #     'max_depth': 3,
+    #     'n_estimators': 100,
+    #     # For XGB:
+    #     'learning_rate': 0.1,
+    #     'subsample': 0.7,
+    #     'colsample_bytree': 0.7,
+    #     'gamma': 0,
+    #     'reg_alpha': 0.1,
+    #     'reg_lambda': 1,
+    # }
     params = {
-        'max_depth': 3,
-        'n_estimators': 100,
-        # For XGB:
-        'learning_rate': 0.1,
-        'subsample': 0.7,
-        'colsample_bytree': 0.7,
-        'gamma': 0,
-        'reg_alpha': 0.1,
-        'reg_lambda': 1,
+        'n_estimators': 200,
+        'criterion': "log_loss",
+        'max_depth': None, #config.max_depth
+        'min_samples_split': 2,
+        'min_samples_leaf': 1,
+        'max_features': "sqrt",
+        'n_jobs': -1,
+        'class_weight': 'balanced',
     }
     scores_df = pd.DataFrame()
     for subject_sim_threshold in subject_sim_thresholds:
@@ -503,6 +516,8 @@ if __name__ == "__main__":
             print(f"Similar excluded for {subject_sim_threshold}/{object_sim_threshold}")
 
             scores = train_gpu(df_known_dt, df_drugs_embeddings, df_targets_embeddings, params)
+            # scores = train(df_known_dt, df_drugs_embeddings, df_targets_embeddings, params)
+
             scores["subject_sim_threshold"] = subject_sim_threshold
             scores["object_sim_threshold"] = object_sim_threshold
             scores_df = pd.concat([scores_df, scores], ignore_index=True)
