@@ -3,10 +3,10 @@ import os
 
 from trapi_predict_kit import TRAPI, settings
 
-from src.predict import get_drug_target_predictions
-from src.train import train
-from src.utils import COLLECTIONS
-from src.vectordb import init_vectordb
+from predict_drug_target.predict import get_drug_target_predictions
+from predict_drug_target.train import train
+from predict_drug_target.utils import COLLECTIONS
+from predict_drug_target.vectordb import init_vectordb
 
 log_level = logging.INFO
 logging.basicConfig(level=log_level)

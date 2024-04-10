@@ -42,7 +42,7 @@ jobs:
     - name: Prepare data and train the model
       run: |
         ./prepare.sh
-        python src/train.py
+        python src/predict_drug_target/train.py
 
     - name: Run tests
       run: |

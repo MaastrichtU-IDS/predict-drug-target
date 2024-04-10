@@ -4,14 +4,14 @@ from datetime import datetime
 import pandas as pd
 from trapi_predict_kit import PredictInput, PredictOutput, trapi_predict
 
-from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.utils import (
+from predict_drug_target.embeddings import compute_drug_embedding, compute_target_embedding
+from predict_drug_target.utils import (
     BOLD,
     COLLECTIONS,
     END,
     log,
 )
-from src.vectordb import init_vectordb
+from predict_drug_target.vectordb import init_vectordb
 
 VECTORDB = init_vectordb(recreate=False)
 

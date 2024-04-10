@@ -33,4 +33,4 @@ cd ..
 
 
 echo "Generate list of known_drug_target pairs for OpenTargets"
-python3 src/prepare.py
+python3 src/predict_drug_target/prepare.py

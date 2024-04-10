@@ -1,6 +1,6 @@
 import typer
 
-# from src.embeddings import compute
+# from predict_drug_target.embeddings import compute
 
 cli = typer.Typer()
 

@@ -19,8 +19,8 @@ from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 from xgboost import XGBClassifier, DMatrix
 
-from src.utils import log, TrainingConfig
-from src.vectordb import init_vectordb
+from predict_drug_target.utils import log, TrainingConfig
+from predict_drug_target.vectordb import init_vectordb
 
 vectordb = init_vectordb(recreate=False)
 

@@ -42,7 +42,7 @@ Query the Bio2RDF endpoint to get drugs and their smiles, targets and their prot
 
 Process the Bio2RDF data to generate the inputs needed for the two embeddings methods
 ```bash
-python src/prepare.py
+python src/predict_drug_target/prepare.py
 ```
 
 Install the ESM library
@@ -84,7 +84,7 @@ export CUDA_VISIBLE_DEVICES=1
 Train the model:
 
 ```bash
-python src/train.py
+python src/predict_drug_target/train.py
 ```
 
 > Results are in the `results/` folder, model pickle goes to the `models/` folder
@@ -94,7 +94,7 @@ python src/train.py
 Run the prediction workflow for 2 entities:
 
 ```bash
-python src/predict.py
+python src/predict_drug_target/predict.py
 ```
 
 Users provides drugs and targets using their CHEMBL or Ensembl IDs, the script will test all provided drugs against all provided targets, and return a prediction score (how confident we are that the drug interacts with the target) for each drug-target pair.

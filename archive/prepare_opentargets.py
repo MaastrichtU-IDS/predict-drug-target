@@ -6,8 +6,8 @@ import os
 import pandas as pd
 from tqdm import tqdm
 
-from src.utils import ACCEPTED_NAMESPACES, COLLECTIONS, get_pref_ids, get_seq_for_target, get_smiles_for_drug, log
-from src.vectordb import init_vectordb
+from predict_drug_target.utils import ACCEPTED_NAMESPACES, COLLECTIONS, get_pref_ids, get_seq_for_target, get_smiles_for_drug, log
+from predict_drug_target.vectordb import init_vectordb
 
 # NOTE: Download opentargets before running this script
 # ./scripts/download_opentargets.sh

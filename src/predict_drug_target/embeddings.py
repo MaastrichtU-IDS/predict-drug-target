@@ -8,7 +8,7 @@ import torch
 from smiles_transformer import get_smiles_embeddings
 from tqdm import tqdm
 
-from src.utils import (
+from predict_drug_target.utils import (
     ACCEPTED_NAMESPACES,
     EMBEDDINGS_SIZE_DRUG,
     EMBEDDINGS_SIZE_TARGET,
@@ -18,7 +18,7 @@ from src.utils import (
     get_smiles_for_drug,
     log,
 )
-from src.vectordb import VectorDB, init_vectordb
+from predict_drug_target.vectordb import VectorDB, init_vectordb
 
 VECTORDB = init_vectordb(recreate=False)
 

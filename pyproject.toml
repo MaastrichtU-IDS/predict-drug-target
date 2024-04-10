@@ -69,7 +69,7 @@ test = [
 ]
 
 [project.scripts]
-predict-dt = "src.__main__:cli"
+predict-dt = "src.predict_drug_target.__main__:cli"
 
 
 [project.urls]
@@ -87,9 +87,9 @@ features = [
 ]
 
 [tool.hatch.envs.default.scripts]
-train = "python3 src/train.py {args}"
-predict = "python3 src/predict.py {args}"
-api = "uvicorn src.api:app --host 0.0.0.0 --reload {args}"
+train = "python3 src/predict_drug_target/train.py {args}"
+predict = "python3 src/predict_drug_target/predict.py {args}"
+api = "uvicorn src.predict_drug_target.api:app --host 0.0.0.0 --reload {args}"
 fmt = [
     "black src/",
     "ruff src/ --fix",
@@ -109,7 +109,7 @@ requirements = "pip-compile -o requirements.txt pyproject.toml"
 
 # TOOLS
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/predict_drug_target"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

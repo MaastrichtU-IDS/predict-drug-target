@@ -6,10 +6,10 @@ import pandas as pd
 from tqdm import tqdm
 from src import vectordb
 
-# from src.embeddings import compute_drug_embedding, compute_target_embedding
-from src.embeddings import compute
-from src.utils import COLLECTIONS, log, get_pref_ids
-from src.vectordb import init_vectordb
+# from predict_drug_target.embeddings import compute_drug_embedding, compute_target_embedding
+from predict_drug_target.embeddings import compute
+from predict_drug_target.utils import COLLECTIONS, log, get_pref_ids
+from predict_drug_target.vectordb import init_vectordb
 
 # NOTE: script to run the WHOLE pipeline on opentargets data
 # it will automatically compute embeddings for all drugs and targets

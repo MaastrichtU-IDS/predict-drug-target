@@ -13,7 +13,7 @@ from qdrant_client.http.models import (
     SearchParams,
 )
 
-from src.utils import log, COLLECTIONS
+from predict_drug_target.utils import log, COLLECTIONS
 
 
 # Define an abstract class VectorDB

@@ -24,7 +24,7 @@ services:
     shm_size: '4g'
     # ports:
     #   - 8000:8000
-    command: uvicorn --host 0.0.0.0 src.api:app
+    command: uvicorn --host 0.0.0.0 src.predict_drug_target.api:app
     # --reload
     networks:
       - nginx

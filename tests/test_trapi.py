@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from trapi_predict_kit import settings
 from reasoner_validator.validator import TRAPIResponseValidator
 
-from src.api import app, trapi_example
+from predict_drug_target.api import app, trapi_example
 
 
 client = TestClient(app)
