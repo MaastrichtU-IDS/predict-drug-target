@@ -8,6 +8,7 @@ import random
 import json
 from datetime import date, datetime
 from itertools import product
+import requests
 
 import numpy as np
 import pandas as pd
@@ -16,11 +17,12 @@ from sklearn import ensemble, metrics
 from sklearn.model_selection import StratifiedKFold, GridSearchCV, train_test_split, KFold
 from sklearn.metrics import precision_score, recall_score, accuracy_score, roc_auc_score, f1_score, average_precision_score
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GridSearchCV
 import xgboost as xgb
 from xgboost import XGBClassifier, DMatrix
 
-from predict_drug_target.utils import log, TrainingConfig
-from predict_drug_target.vectordb import init_vectordb
+from src.utils import log, TrainingConfig
+from src.vectordb import init_vectordb
 
 vectordb = init_vectordb(recreate=False)
 
@@ -46,26 +48,6 @@ def generate_dt_pairs(dt_df):
     return pairs, labels
 
 
-def balance_data(pairs, classes, n_proportion):
-    """Don't take all the generated  "don't interact" pairs, just the same amount of known pairs"""
-    classes = np.array(classes)
-    pairs = np.array(pairs)
-
-    indices_true = np.where(classes == 1)[0]
-    indices_false = np.where(classes == 0)[0]
-
-    np.random.shuffle(indices_false)
-    indices = indices_false[: (n_proportion * indices_true.shape[0])]
-
-    print(f"True positives: {len(indices_true)}")
-    print(f"True negatives: {len(indices_false)}")
-    pairs = np.concatenate((pairs[indices_true], pairs[indices]), axis=0)
-    classes = np.concatenate((classes[indices_true], classes[indices]), axis=0)
-
-    return pairs, classes
-
-
-
 def multimetric_score(estimator, X_test, y_test, scorers):
     """Return a dict of score for multimetric scoring"""
     scores = {}
@@ -86,6 +68,24 @@ def multimetric_score(estimator, X_test, y_test, scorers):
                 f"scoring must return a number, got {score!s} ({type(score)}) " f"instead. (scorer={name})"
             )
     return scores
+
+
+def balance_data(pairs, classes, n_proportion):
+    classes = np.array(classes)
+    pairs = np.array(pairs)
+
+    indices_true = np.where(classes == 1)[0]
+    indices_false = np.where(classes == 0)[0]
+
+    np.random.shuffle(indices_false)
+    indices = indices_false[: (n_proportion * indices_true.shape[0])]
+
+    print(f"True positives: {len(indices_true)}")
+    print(f"True negatives: {len(indices_false)}")
+    pairs = np.concatenate((pairs[indices_true], pairs[indices]), axis=0)
+    classes = np.concatenate((classes[indices_true], classes[indices]), axis=0)
+
+    return pairs, classes
 
 
 def get_scores(clf, X_new, y_new):
@@ -215,19 +215,34 @@ def train(
     # nb_model = GaussianNB()
     # lr_model = linear_model.LogisticRegression()
     # rf_model = ensemble.RandomForestClassifier(n_estimators=200, n_jobs=-1)
-    rf_model = ensemble.RandomForestClassifier(
+    # rf_model = ensemble.RandomForestClassifier(
+    #     n_estimators=200,
+    #     criterion="gini", # log_loss
+    #     max_depth=None, # config.max_depth
+    #     min_samples_split=2,
+    #     min_samples_leaf=1,
+    #     max_features="sqrt",
+    #     n_jobs=-1,
+    #     # class_weight="balanced",
+    # )
+    xgb_model = XGBClassifier(
         n_estimators=200,
-        criterion="log_loss",
-        max_depth=config.max_depth,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        max_features="sqrt",
+        max_depth=None, #config.max_depth,
+        learning_rate=0.1,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        gamma=0,
+        reg_alpha=0,
+        reg_lambda=1,
+        objective='binary:logistic',  # For binary classification
         n_jobs=-1,
-        class_weight="balanced",
+        random_state=42,
+        tree_method='hist', # Use GPU optimized histogram algorithm
+        # device='gpu',
     )
 
     # clfs = [('Naive Bayes',nb_model),('Logistic Regression',lr_model),('Random Forest',rf_model)]
-    clfs = [("Random Forest", rf_model)] # "XGBoost", xgb_model
+    clfs = [("XGBoost", xgb_model)] # "Random Forest", rf_model
 
     n_seed = 100
     n_fold = 10
@@ -247,7 +262,7 @@ def train(
 
     os.makedirs("models", exist_ok=True)
     with open(save_model, "wb") as f:
-        pickle.dump(rf_model, f) # xgb_model
+        pickle.dump(xgb_model, f) # rf_model
 
     return agg_df.mean()
     # return agg_df.to_dict(orient="records")
@@ -255,6 +270,11 @@ def train(
 
 ################### Train with a grid of hyperparameters to find the best
 
+
+# def get_params_combinations(params):
+# 	keys, values = zip(*params.items())
+# 	combinations = [dict(zip(keys, v)) for v in product(*values)]
+# 	return combinations
 
 def train_gpu(
     df_known_interactions: pd.DataFrame,
@@ -328,24 +348,26 @@ def train_gpu(
     best_accuracy = 0
     os.makedirs("models", exist_ok=True)
 
+    # for fold, (train_index, test_index) in enumerate(kf.split(X)):
     # Train model for each fold
     for fold, (train_index, test_index) in enumerate(skf.split(X, y)):
         x_train, x_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
-        start_fold_time = time.time()
 
-        # Send data to GPU for XGBoost
-        # dtrain = xgb.DMatrix(x_train, label=y_train)
-        # dtest = xgb.DMatrix(x_test, label=y_test)
+#         # Send data to GPU for XGBoost
+        send_time = time.time()
+        dtrain = xgb.DMatrix(x_train, label=y_train)
+        dtest = xgb.DMatrix(x_test, label=y_test)
+#         # print(f"Sending data to GPU took {time.time() - send_time}s")
 
-        # # Train XGBoost model
-        # model = xgb.train(params, dtrain, num_boost_round=100)
-        # predictions = model.predict(dtest)
+        # Train XGBoost model
+        model = xgb.train(params, dtrain, num_boost_round=100)
+        predictions = model.predict(dtest)
 
-        # Train Random Forest model
-        model = RandomForestClassifier(**params)
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_test)
+        # # Train Random Forest model
+        # model = RandomForestClassifier(**params)
+        # model.fit(x_train, y_train)
+        # predictions = model.predict(x_test)
 
         # Evaluate model
         predictions_binary = np.round(predictions) # Convert probabilities to binary outputs
@@ -375,12 +397,14 @@ def train_gpu(
             with open(save_model, "wb") as f:
                 pickle.dump(model, f)
 
-        # Force garbage collection for xgb on GPU:
-        # del dtrain, dtest, model
-        # gc.collect()
+        # os.makedirs("models", exist_ok=True)
+        # with open(save_model_path, "wb") as f:
+        #     pickle.dump(model, f)
 
+        # del dtrain, dtest, model
+        gc.collect()  # Force garbage collection for xgb on GPU
         print(fold_results)
-        log.info(f"Completed fold {fold + 1}/{n_splits} in {time.time() - start_fold_time}s")
+        log.info(f"Completed fold {fold + 1}/{n_splits} in {time.time() - send_time}s")
 
     log.info(f"Combination took {time.time() - combination_time}s")
 
@@ -402,6 +426,15 @@ def train_gpu(
 
 def drop_similar(df: str, col_id: str, threshold: float = 0.9):
     """Given a DF remove all entities that are too similar"""
+    # Set the timeout duration in seconds (e.g., 60 seconds)
+    timeout_seconds = 120
+
+    # Create a session object with custom timeout settings
+    session = requests.Session()
+    session.timeout = timeout_seconds
+
+    # # Pass the session object to the VectorDB initialization
+    # vectordb = init_vectordb(session=session, recreate=False)
     vectordb = init_vectordb(recreate=False)
     indices_to_drop = []
     # TODO: remove things that are too similar
@@ -461,31 +494,31 @@ if __name__ == "__main__":
     os.makedirs(out_dir, exist_ok=True)
 
     # Longer version:
-    subject_sim_thresholds = [1, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50, 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10]
-    object_sim_thresholds = [1, 0.97, 0.94, 0.91, 0.88, 0.85, 0.82, 0.79, ]
+    subject_sim_thresholds = [1, 0.95, 0.90, 0.85, 0.80, 0.75, 0.70, 0.65, 0.60, 0.55, 0.50] # 0.45, 0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.10
+    object_sim_thresholds = [1, 0.99, 0.98, 0.97, 0.96, 0.95, 0.94, 0.93, 0.92, 0.91, 0.90, 0.89, 0.88, 0.87] # 0.86, 0.85, 0.84, 0.82, 0.80, 0.78, 0.76, 0.74, 0.72, 0.70
     # subject_sim_thresholds = [1]
     # object_sim_thresholds = [1]
-    # params = { #XGB
-    #     'max_depth': 3,
-    #     'n_estimators': 100,
-    #     # For XGB:
-    #     'learning_rate': 0.1,
-    #     'subsample': 0.7,
-    #     'colsample_bytree': 0.7,
-    #     'gamma': 0,
-    #     'reg_alpha': 0.1,
-    #     'reg_lambda': 1,
-    # }
-    params = {
+    params = { #XGB
+        'max_depth': None,
         'n_estimators': 200,
-        'criterion': "log_loss",
-        'max_depth': None, #config.max_depth
-        'min_samples_split': 2,
-        'min_samples_leaf': 1,
-        'max_features': "sqrt",
-        'n_jobs': -1,
-        'class_weight': 'balanced',
+        # For XGB:
+        'learning_rate': 0.1,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'gamma': 0,
+        'reg_alpha': 0.1,
+        'reg_lambda': 1,
     }
+    # params = {
+    #     'n_estimators': 200,
+    #     'criterion': "gini", # log_loss
+    #     'max_depth': None, #config.max_depth 
+    #     'min_samples_split': 2,
+    #     'min_samples_leaf': 1,
+    #     'max_features': "sqrt",
+    #     'n_jobs': -1,
+    #     # 'class_weight': 'balanced',
+    # }
     scores_df = pd.DataFrame()
     for subject_sim_threshold in subject_sim_thresholds:
         for object_sim_threshold in object_sim_thresholds:
@@ -501,4 +534,4 @@ if __name__ == "__main__":
             scores_df = pd.concat([scores_df, scores], ignore_index=True)
 
     print("SCORES DF", scores_df)
-    scores_df.to_csv(f"{out_dir}/compare_scores.csv", index=False)
+    scores_df.to_csv(f"{out_dir}/compare_scores_opentargets_xgb.csv", index=False)
